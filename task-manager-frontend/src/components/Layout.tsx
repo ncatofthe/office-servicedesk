@@ -1,0 +1,587 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Bell, BookOpen, ChevronRight, Home, LifeBuoy, Plus, Ticket } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useProductSettings } from '../contexts/ProductSettingsContext';
+import { notificationsApi } from '../api';
+import type { Notification } from '../types';
+import { APP_NAV_ITEMS, canAccessModule, canCreateTasks } from '../access';
+import { formatDateTime, getInitials, getRoleLabel } from '../utils';
+import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
+
+const notificationTypeLabels: Record<string, string> = {
+  TASK_CREATED: 'Новая заявка',
+  TASK_CREATED_WEB: 'Новая заявка',
+  TASK_CREATED_EMAIL: 'Новая заявка из почты',
+  TASK_UPDATED: 'Заявка обновлена',
+  STATUS_CHANGED: 'Статус изменён',
+  TASK_STATUS_CHANGED: 'Статус заявки изменён',
+  COMMENT_ADDED: 'Новый комментарий',
+  REQUESTER_COMMENT: 'Новый ответ заявителя',
+  AGENT_PUBLIC_COMMENT: 'Новый ответ по заявке',
+  INTERNAL_NOTE_ADDED: 'Внутренняя заметка',
+  AGENT_INTERNAL_NOTE: 'Внутренняя заметка',
+  TASK_ASSIGNED: 'Вам назначена заявка',
+  TASK_MERGED: 'Заявки объединены',
+  EMAIL_REPLY_SENT: 'Email-ответ',
+  EMAIL_FAILED: 'Ошибка email',
+  EMAIL_OUTBOUND_FAILED: 'Ошибка email-отправки',
+  EMAIL_OUTBOUND_RECOVERED: 'Email доставлен после повтора',
+  CANNED_REPLY_USED: 'Шаблон ответа',
+};
+
+const taskStatusLabels: Record<string, string> = {
+  NEW: 'Необработано',
+  IN_PROGRESS: 'В процессе',
+  DONE: 'Закрыто',
+  MERGED: 'Объединена',
+  REVIEW: 'На проверке',
+};
+
+const getTaskStatusLabel = (status: string) => taskStatusLabels[status.toUpperCase()] || status;
+
+const getNotificationTaskName = (notification: Notification, fallback?: string) => {
+  const taskTitle = notification.task?.title?.trim() || fallback?.trim();
+  return taskTitle ? `«${taskTitle}»` : 'заявка';
+};
+
+const getStatusTransition = (notification: Notification) => {
+  const metadataFrom = notification.metadata?.fromStatus;
+  const metadataTo = notification.metadata?.toStatus;
+  if (typeof metadataFrom === 'string' && typeof metadataTo === 'string') {
+    return { from: metadataFrom, to: metadataTo, taskName: notification.task?.title };
+  }
+
+  const rawMessage = notification.description?.trim() || notification.message?.trim() || '';
+  const match = rawMessage.match(/^Task\s+["“](.+?)["”]\s+status changed from\s+([A-Z_]+)\s+to\s+([A-Z_]+)\.?$/i);
+  if (!match) {
+    return null;
+  }
+
+  return { taskName: match[1], from: match[2], to: match[3] };
+};
+
+const getNotificationTypeLabel = (type?: string) => {
+  if (!type) {
+    return 'Уведомление';
+  }
+
+  return notificationTypeLabels[type.toUpperCase()] || 'Уведомление';
+};
+
+const getNotificationMessage = (notification: Notification) => {
+  const transition = getStatusTransition(notification);
+  if (transition) {
+    return `${getNotificationTaskName(notification, transition.taskName)}: ${getTaskStatusLabel(transition.from)} → ${getTaskStatusLabel(transition.to)}.`;
+  }
+
+  const rawMessage = notification.description?.trim() || notification.message?.trim() || '';
+  const reviewMatch = rawMessage.match(/^Task\s+["“](.+?)["”]\s+moved to review\.?$/i);
+  if (reviewMatch) {
+    return `${getNotificationTaskName(notification, reviewMatch[1])} отправлена на проверку.`;
+  }
+
+  return rawMessage || 'Новое событие в ServiceDesk.';
+};
+
+const getNotificationTitle = (notification: Notification) => {
+  if (getStatusTransition(notification)) {
+    return 'Статус заявки изменён';
+  }
+
+  const rawMessage = notification.description?.trim() || notification.message?.trim() || '';
+  if (/^Task\s+["“].+?["”]\s+moved to review\.?$/i.test(rawMessage)) {
+    return 'Заявка отправлена на проверку';
+  }
+
+  const title = notification.title?.trim();
+  if (title && !/^notification$/i.test(title) && title.toLowerCase() !== 'уведомление') {
+    return title;
+  }
+
+  return getNotificationTypeLabel(notification.type);
+};
+
+const getSafeNotificationReason = (notification: Notification) => {
+  const metadataReason = notification.metadata?.safeReason || notification.metadata?.errorMessage || notification.metadata?.reason;
+  const reason = notification.safeReason || (typeof metadataReason === 'string' ? metadataReason : '');
+  const trimmed = reason.trim();
+
+  if (!trimmed || trimmed.length > 220 || trimmed.includes('\n') || trimmed.includes(' at ')) {
+    return '';
+  }
+
+  return trimmed;
+};
+
+const isEndpointUnavailable = (error: unknown) => {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 404 || status === 405 || status === 501;
+};
+
+export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, logout } = useAuth();
+  const { settings } = useProductSettings();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isRequester = user?.role === 'REQUESTER';
+  const visibleNavItems = APP_NAV_ITEMS
+    .filter((item) => canAccessModule(user?.role, item.moduleKey))
+    .map((item) => ({
+      ...item,
+      label: isRequester && item.path === '/tickets'
+        ? 'Мои заявки'
+        : isRequester && item.path === '/knowledge'
+          ? 'Помощь'
+          : item.label,
+    }));
+
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [notificationsReady, setNotificationsReady] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
+  const [markingAllRead, setMarkingAllRead] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | undefined>(() => getProfileExtras(user?.id).avatarDataUrl);
+
+  const sortedNotifications = useMemo(
+    () => [...notifications].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
+    [notifications]
+  );
+  const latestNotifications = sortedNotifications.slice(0, 5);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const handleOpenProfile = () => {
+    setProfileMenuOpen(false);
+    navigate('/profile');
+  };
+
+  const syncUnreadCount = useCallback(async () => {
+    try {
+      const count = await notificationsApi.getUnreadCount();
+      setUnreadCount(count);
+    } catch (error) {
+      if (!isEndpointUnavailable(error)) {
+        setNotificationsError('Не удалось обновить счётчик уведомлений.');
+      }
+    }
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoadingNotifications(true);
+      setNotificationsError('');
+      const data = await notificationsApi.getAll({ limit: 30 });
+      setNotifications(data);
+      setUnreadCount(data.filter((item) => !item.isRead).length);
+      setNotificationsReady(true);
+    } catch (error) {
+      if (isEndpointUnavailable(error)) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setNotificationsReady(false);
+        setNotificationsError('Центр уведомлений пока недоступен.');
+        return;
+      }
+
+      setNotificationsError('Не удалось загрузить уведомления.');
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setAvatarDataUrl(getProfileExtras(user?.id).avatarDataUrl);
+  }, [user?.id]);
+
+  useEffect(() => {
+    void syncUnreadCount();
+    const timer = window.setInterval(() => {
+      void syncUnreadCount();
+    }, 60000);
+
+    return () => window.clearInterval(timer);
+  }, [syncUnreadCount]);
+
+  useEffect(() => {
+    const handleProfileExtrasUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string }>).detail;
+      if (!user?.id || detail?.userId !== user.id) {
+        return;
+      }
+
+      setAvatarDataUrl(getProfileExtras(user.id).avatarDataUrl);
+    };
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setProfileMenuOpen(false);
+      }
+
+      if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
+        const target = event.target as HTMLElement;
+        if (target.dataset.notificationDrawerOverlay === 'true') {
+          setNotificationsDrawerOpen(false);
+        }
+      }
+    };
+
+    window.addEventListener(PROFILE_EXTRAS_UPDATED_EVENT, handleProfileExtrasUpdated as EventListener);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener(PROFILE_EXTRAS_UPDATED_EVENT, handleProfileExtrasUpdated as EventListener);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [user?.id]);
+
+  const openNotifications = async () => {
+    if (window.matchMedia('(max-width: 639px)').matches) {
+      await openNotificationsDrawer();
+      return;
+    }
+
+    setNotificationsOpen((current) => !current);
+    if (!notificationsReady || notifications.length === 0) {
+      await loadNotifications();
+    }
+  };
+
+  const openNotificationsDrawer = async () => {
+    setNotificationsDrawerOpen(true);
+    setNotificationsOpen(false);
+    await loadNotifications();
+  };
+
+  const markNotificationRead = async (notificationId: string) => {
+    try {
+      await notificationsApi.markRead(notificationId);
+      setNotifications((current) => current.map((item) => (
+        item.id === notificationId ? { ...item, isRead: true } : item
+      )));
+      setUnreadCount((current) => Math.max(0, current - 1));
+    } catch {
+      setNotificationsError('Не удалось отметить уведомление как прочитанное.');
+    }
+  };
+
+  const markAllRead = async () => {
+    try {
+      setMarkingAllRead(true);
+      setNotificationsError('');
+      await notificationsApi.markAllRead();
+      setNotifications((current) => current.map((item) => ({ ...item, isRead: true })));
+      setUnreadCount(0);
+    } catch {
+      setNotificationsError('Не удалось отметить уведомления как прочитанные.');
+    } finally {
+      setMarkingAllRead(false);
+    }
+  };
+
+  const openNotificationTask = async (notification: Notification) => {
+    if (!notification.isRead) {
+      await markNotificationRead(notification.id);
+    }
+
+    setNotificationsOpen(false);
+    setNotificationsDrawerOpen(false);
+
+    if (notification.taskId) {
+      navigate(`/tickets?taskId=${notification.taskId}`);
+      return;
+    }
+
+    navigate('/tickets');
+  };
+
+  return (
+    <div
+      className="min-h-screen"
+      style={{
+        background:
+          'radial-gradient(circle at top left, rgba(226,233,236,0.85) 0%, rgba(226,233,236,0) 28%), radial-gradient(circle at top right, rgba(244,238,228,0.9) 0%, rgba(244,238,228,0) 24%), var(--bg-page)',
+      }}
+    >
+      <header className="sticky top-0 z-30 px-3 pb-3 pt-3 backdrop-blur-sm sm:px-4 sm:pb-4 sm:pt-4">
+        <div className="mx-auto max-w-[1440px] rounded-[18px] border border-white/80 bg-[rgba(255,255,255,0.9)] px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.08)] sm:px-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 min-[1200px]:grid-cols-[minmax(160px,210px)_minmax(0,1fr)_auto] min-[1200px]:gap-x-4">
+            <Link to="/" className="flex min-w-0 items-center gap-3 rounded-[14px] transition-opacity hover:opacity-85" aria-label="На главную">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] bg-[#2f2f2f] text-white shadow-[0_10px_22px_rgba(0,0,0,0.17)]">
+                <LifeBuoy size={21} />
+              </div>
+              <div className="min-w-0">
+                {settings?.companyName?.trim() && settings.companyName.trim() !== settings.portalName.trim() && (
+                  <p className="truncate text-[11px] uppercase tracking-[0.18em] text-[#8b8b8b]" data-testid="layout-company-name">
+                    {settings.companyName}
+                  </p>
+                )}
+                <p className="truncate text-sm font-semibold text-[#1f1f1f]" data-testid="layout-portal-name">
+                  {settings?.portalName?.trim() || 'Office ServiceDesk'}
+                </p>
+              </div>
+            </Link>
+
+            <nav className="col-span-2 row-start-2 min-w-0 min-[1200px]:col-span-1 min-[1200px]:col-start-2 min-[1200px]:row-start-1">
+              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 min-[1200px]:flex-wrap min-[1200px]:items-center min-[1200px]:justify-center min-[1200px]:overflow-visible min-[1200px]:pb-0">
+                {visibleNavItems.map((item) => {
+                  const active = location.pathname === item.path || (item.path === '/tickets' && location.pathname === '/tasks') || (item.path === '/queue' && location.pathname === '/kanban');
+                  const RequesterNavIcon = isRequester
+                    ? item.path === '/'
+                      ? Home
+                      : item.path === '/tickets'
+                        ? Ticket
+                        : item.path === '/knowledge'
+                          ? BookOpen
+                          : null
+                    : null;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3 text-center text-sm font-medium transition-all min-[1200px]:h-9 min-[1200px]:px-2.5 min-[1200px]:text-[13px] min-[1380px]:px-3 min-[1380px]:text-sm ${
+                        active
+                          ? 'border-[#2f2f2f] bg-[#2f2f2f] text-white shadow-[0_10px_20px_rgba(0,0,0,0.14)]'
+                          : 'border-[#dddddd] bg-white/90 text-[#3f3f3f] hover:border-[#c3c3c3] hover:bg-white'
+                      }`}
+                    >
+                      {RequesterNavIcon && <RequesterNavIcon size={15} />}
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+
+            <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-end gap-2 min-[1200px]:col-start-3">
+              {canCreateTasks(user?.role) && (
+                <>
+                  <Link
+                    to="/tickets?create=1"
+                    className="hidden h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#2f2f2f] px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition hover:bg-[#1f1f1f] sm:inline-flex"
+                    data-testid="header-create-ticket"
+                  >
+                    <Plus size={16} />
+                    Новая заявка
+                  </Link>
+                  <Link
+                    to="/tickets?create=1"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#2f2f2f] text-white shadow-[0_8px_18px_rgba(0,0,0,0.12)] sm:hidden"
+                    aria-label="Создать заявку"
+                  >
+                    <Plus size={18} />
+                  </Link>
+                </>
+              )}
+              {user && (
+                <div className="hidden max-w-[180px] rounded-[13px] border border-[#e6e6e6] bg-[#f8f8f8] px-3 py-1.5 text-right min-[1400px]:block">
+                  <p className="truncate text-sm font-semibold text-[#1f1f1f]">{user.name}</p>
+                  <p className="text-xs text-[#8a8a8a]">{getRoleLabel(user.role)}</p>
+                </div>
+              )}
+
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  type="button"
+                  className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-[#dddddd] bg-white"
+                  onClick={() => void openNotifications()}
+                  data-testid="notification-bell"
+                  aria-label="Открыть уведомления"
+                >
+                  <Bell size={18} className="text-[#353535]" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2f2f2f] px-1 text-[10px] text-white">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notificationsOpen && (
+                  <div className="fixed left-3 right-3 top-[76px] w-auto rounded-[16px] border border-[#dedede] bg-white p-3 shadow-[0px_18px_40px_rgba(0,0,0,0.1)] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(390px,calc(100vw-2rem))]" data-testid="notifications-dropdown">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[#353535]">Уведомления</p>
+                        <p className="text-xs text-[#8a8a8a]">Последние события по вашим заявкам.</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="shrink-0 whitespace-nowrap text-xs font-medium text-[#4f4f4f] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-[#a0a0a0]"
+                        onClick={() => void markAllRead()}
+                        disabled={markingAllRead || unreadCount === 0 || !notificationsReady}
+                        data-testid="notification-read-all"
+                      >
+                        {markingAllRead ? 'Отмечаем...' : 'Отметить всё прочитанным'}
+                      </button>
+                    </div>
+
+                    <div className="mt-3">
+                      {loadingNotifications ? (
+                        <p className="rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] px-3 py-4 text-sm text-[#6b6b6b]">Загружаем уведомления...</p>
+                      ) : notificationsError ? (
+                        <p className="rounded-[12px] border border-[#f3c4c4] bg-[#fff4f4] px-3 py-4 text-sm text-[#b23b3b]">{notificationsError}</p>
+                      ) : latestNotifications.length === 0 ? (
+                        <p className="rounded-[12px] border border-dashed border-[#dddddd] bg-[#fcfcfc] px-3 py-4 text-sm text-[#6b6b6b]">Новых уведомлений пока нет.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {latestNotifications.map((notification) => (
+                            <button
+                              key={notification.id}
+                              type="button"
+                              className={`w-full rounded-[12px] border px-3 py-3 text-left transition-colors ${
+                                notification.isRead
+                                  ? 'border-[#e6e6e6] bg-white'
+                                  : 'border-[#d8dfef] bg-[#f8faff]'
+                              }`}
+                              onClick={() => void openNotificationTask(notification)}
+                              data-testid="notification-item"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="break-words text-sm font-semibold leading-5 text-[#1f1f1f] [overflow-wrap:anywhere]">{getNotificationTitle(notification)}</p>
+                                  <p className="mt-1 break-words text-sm leading-5 text-[#5f5f5f] [overflow-wrap:anywhere]">{getNotificationMessage(notification)}</p>
+                                  <p className="mt-2 text-xs text-[#8a8a8a]">{formatDateTime(notification.createdAt)}</p>
+                                </div>
+                                {!notification.isRead && <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#2f2f2f]" />}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-3 flex w-full items-center justify-between rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] px-3 py-2 text-sm font-medium text-[#303030]"
+                      onClick={() => void openNotificationsDrawer()}
+                    >
+                      Все уведомления
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="relative" ref={profileMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setProfileMenuOpen((value) => !value)}
+                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[10px] border border-[#dddddd] bg-white text-sm font-semibold text-[#353535]"
+                >
+                  {avatarDataUrl ? (
+                    <img src={avatarDataUrl} alt={user?.name || 'Профиль'} className="h-full w-full object-cover" />
+                  ) : (
+                    getInitials(user?.name || 'User')
+                  )}
+                </button>
+
+                {profileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-44 rounded-xl border border-[#dedede] bg-white p-2 shadow-[0px_10px_30px_rgba(0,0,0,0.06)]">
+                    <button
+                      type="button"
+                      onClick={handleOpenProfile}
+                      className="flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-[#353535] hover:bg-[#f6f6f6]"
+                    >
+                      Профиль
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="mt-1 flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-[#353535] hover:bg-[#f6f6f6]"
+                    >
+                      Выйти
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {notificationsDrawerOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-[rgba(15,15,15,0.32)] sm:px-4 sm:py-4"
+          data-notification-drawer-overlay="true"
+        >
+          <div ref={drawerRef} className="ml-auto flex h-full w-full max-w-[480px] flex-col border border-[#dddddd] bg-white shadow-[0_22px_48px_rgba(0,0,0,0.16)] sm:rounded-[20px]" data-testid="notifications-drawer">
+            <div className="flex items-start justify-between gap-4 border-b border-[#ececec] px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <p className="text-base font-semibold text-[#1f1f1f]">Уведомления</p>
+                <p className="mt-1 text-sm text-[#8a8a8a]">Всё, что требует внимания по вашим обращениям.</p>
+              </div>
+              <button type="button" className="btn shrink-0" onClick={() => setNotificationsDrawerOpen(false)}>
+                Закрыть
+              </button>
+            </div>
+
+            <div className="flex flex-col items-stretch gap-3 border-b border-[#ececec] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <p className="whitespace-nowrap text-sm text-[#5f5f5f]">Непрочитано: <span className="font-semibold text-[#1f1f1f]">{unreadCount}</span></p>
+              <button
+                type="button"
+                className="btn w-full sm:w-auto"
+                onClick={() => void markAllRead()}
+                disabled={markingAllRead || unreadCount === 0 || !notificationsReady}
+              >
+                {markingAllRead ? 'Отмечаем...' : 'Отметить всё прочитанным'}
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5">
+              {loadingNotifications ? (
+                <p className="rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] px-3 py-4 text-sm text-[#6b6b6b]">Загружаем уведомления...</p>
+              ) : notificationsError ? (
+                <p className="rounded-[12px] border border-[#f3c4c4] bg-[#fff4f4] px-3 py-4 text-sm text-[#b23b3b]">{notificationsError}</p>
+              ) : sortedNotifications.length === 0 ? (
+                <p className="rounded-[12px] border border-dashed border-[#dddddd] bg-[#fcfcfc] px-3 py-4 text-sm text-[#6b6b6b]">Пока уведомлений нет.</p>
+              ) : (
+                <div className="space-y-3">
+                  {sortedNotifications.map((notification) => (
+                    <button
+                      key={notification.id}
+                      type="button"
+                      className={`w-full rounded-[14px] border px-3 py-3 text-left transition-colors sm:px-4 ${
+                        notification.isRead
+                          ? 'border-[#e3e3e3] bg-white'
+                          : 'border-[#d8dfef] bg-[#f8faff]'
+                      }`}
+                      onClick={() => void openNotificationTask(notification)}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-semibold leading-5 text-[#1f1f1f] [overflow-wrap:anywhere]">{getNotificationTitle(notification)}</p>
+                          <p className="mt-1 break-words text-sm leading-5 text-[#4f4f4f] [overflow-wrap:anywhere]">{getNotificationMessage(notification)}</p>
+                          {getSafeNotificationReason(notification) && user?.role === 'ADMIN' && (
+                            <p className="mt-2 break-words rounded-[8px] border border-[#f0dcb8] bg-[#fff7ea] px-2 py-1 text-xs leading-5 text-[#8a5b14] [overflow-wrap:anywhere]">
+                              Причина: {getSafeNotificationReason(notification)}
+                            </p>
+                          )}
+                          <p className="mt-2 text-xs text-[#8a8a8a]">{formatDateTime(notification.createdAt)}</p>
+                        </div>
+                        {!notification.isRead && <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-[#2f2f2f]" />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto max-w-[1440px] px-4 pb-10">{children}</main>
+    </div>
+  );
+};

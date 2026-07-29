@@ -1,0 +1,16 @@
+[Unit]
+Description=Office ServiceDesk Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/officesd
+EnvironmentFile=/opt/officesd/task-manager-backend/.env
+ExecStart=/usr/bin/npm --workspace task-manager-backend run start
+Restart=always
+RestartSec=5
+User=servicedesk
+Group=servicedesk
+
+[Install]
+WantedBy=multi-user.target

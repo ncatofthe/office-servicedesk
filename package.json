@@ -1,0 +1,32 @@
+{
+  "name": "task-manager-workspace",
+  "private": true,
+  "workspaces": [
+    "task-manager-backend",
+    "task-manager-frontend",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm --workspace task-manager-backend run dev:runtime",
+    "dev:backend:plain": "npm --workspace task-manager-backend run dev",
+    "dev:frontend": "npm --workspace task-manager-frontend run dev",
+    "test:backend:db": "npm --workspace task-manager-backend run test:db",
+    "test:e2e:smoke:install": "playwright install chromium",
+    "test:e2e:smoke": "env -u NO_COLOR FORCE_COLOR=0 npm --workspace task-manager-backend run test:db:check-env && env -u NO_COLOR FORCE_COLOR=0 playwright test --config=playwright.config.ts e2e/smoke.spec.ts",
+    "test:e2e:smoke:headed": "npm run test:e2e:smoke -- --headed",
+    "build:contracts": "npm --workspace @task-manager/contracts run build",
+    "build:frontend": "npm --workspace task-manager-frontend run build",
+    "render:build": "npm run build:contracts && npm --workspace task-manager-backend run prisma:generate",
+    "render:start": "DATABASE_URL=\"${DB_URL_REAL:-$DATABASE_URL}\" npm --workspace task-manager-backend run prisma:migrate:deploy && DATABASE_URL=\"${DB_URL_REAL:-$DATABASE_URL}\" npm --workspace task-manager-backend start",
+    "validate:prisma": "npm --workspace task-manager-backend exec prisma validate",
+    "typecheck:contracts": "npm --workspace @task-manager/contracts run typecheck",
+    "check:release": "npm audit --omit=dev && npm run build:contracts && npm run validate:prisma && npm run test:backend:db && npm --workspace task-manager-frontend run lint && npm run build:frontend && npm run test:e2e:smoke"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  },
+  "overrides": {
+    "form-data": "4.0.6",
+    "qs": "6.15.3"
+  }
+}

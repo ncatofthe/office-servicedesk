@@ -1,0 +1,29 @@
+{
+  "name": "@task-manager/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime.ts",
+      "import": "./dist/esm/runtime.js",
+      "require": "./dist/cjs/runtime.js",
+      "default": "./dist/esm/runtime.js"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && npm run build:runtime:esm && npm run build:runtime:cjs && node ./scripts/write-cjs-package.cjs",
+    "build:runtime:esm": "node ./scripts/run-tsc.cjs -p tsconfig.runtime.esm.json",
+    "build:runtime:cjs": "node ./scripts/run-tsc.cjs -p tsconfig.runtime.cjs.json",
+    "typecheck": "node ./scripts/run-tsc.cjs -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "typescript": "~5.9.3"
+  }
+}

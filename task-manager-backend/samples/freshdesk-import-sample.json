@@ -1,0 +1,46 @@
+{
+  "tickets": [
+    {
+      "id": "fd-1001",
+      "externalNumber": "1001",
+      "subject": "Не печатает МФУ в бухгалтерии",
+      "description": "Пользователь сообщает, что МФУ не принимает задания на печать.",
+      "status": "open",
+      "priority": "high",
+      "requester": {
+        "email": "ivan.requester@example.com",
+        "name": "Иван Заявитель"
+      },
+      "agent": {
+        "email": "support.agent@example.com",
+        "name": "Анна Исполнитель"
+      },
+      "comments": [
+        {
+          "id": "fd-comment-1",
+          "body": "Заявка принята в работу.",
+          "private": false,
+          "author": {
+            "email": "support.agent@example.com",
+            "name": "Анна Исполнитель"
+          }
+        },
+        {
+          "id": "fd-note-1",
+          "body": "Похоже, закончился тонер. Проверить складской остаток.",
+          "private": true,
+          "author": {
+            "email": "support.agent@example.com",
+            "name": "Анна Исполнитель"
+          }
+        }
+      ],
+      "attachments": [
+        {
+          "fileName": "freshdesk-screenshot.png",
+          "url": "https://example.freshdesk.com/helpdesk/attachments/1001"
+        }
+      ]
+    }
+  ]
+}

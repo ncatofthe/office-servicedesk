@@ -1,0 +1,36 @@
+PRODUCT SPEC v1 - Office ServiceDesk
+Updated: 2026-04-22
+
+1. Product goal
+Build a Russian-language ServiceDesk portal for a 50-60 person office. The system covers IT, 1C, warehouse, orders, shipments, returns, marketplace operations and internal documentation requests.
+
+2. Primary users
+- Requesters create and track their own tickets.
+- Agents process tickets and communicate with requesters.
+- Admins configure folders, types, subtypes, entities, teams and users.
+- Director accepts release and reviews statistics.
+
+3. MVP scope
+- Web ticket creation.
+- Ticket list and queue.
+- Configurable ServiceDesk dictionaries.
+- Comments and attachments.
+- Basic search and filters.
+- LINK/UNION merge and close approvals on backend.
+- Russian UI.
+
+4. Out of MVP
+- Yandex IMAP/SMTP intake and replies.
+- Knowledge base.
+- Backup automation.
+- SLA.
+- Marketplace/1C integrations.
+
+5. Acceptance
+- User can create ticket.
+- Agent can process ticket.
+- Admin can configure dictionaries.
+- Attachments and comments work.
+- Backend smoke tests pass.
+- Frontend build passes.
+- Merge UI contract is aligned before director demo.

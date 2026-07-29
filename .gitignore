@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Env and logs
+.env
+.env.*
+!.env.example
+!*/.env.example
+!*/.env.*.example
+*.log
+
+# Build artifacts
+dist/
+*/dist/
+dist-ssr/
+
+# Runtime data
+artifacts/
+backups/
+.pgdata-taskmgr/
+test-results/
+playwright-report/
+task-manager-backend/uploads/
+task-manager-backend/uploads-test/
+uploads-test/
+
+# Recovered production metadata/config
+_recovery-manifest.json
+_server-config/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
