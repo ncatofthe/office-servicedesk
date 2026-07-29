@@ -58,7 +58,8 @@ const buildAgentTaskAccessWhere = (userId, accessibleFolderIds) => {
             // Until an admin/agent routes them into a folder, every agent should
             // see them in the unprocessed pool instead of letting them disappear.
             { folderId: null },
-            { assignees: { some: { userId } } }
+            { assignees: { some: { userId } } },
+            { chatParticipants: { some: { userId } } }
         ]
     };
 };
@@ -91,11 +92,14 @@ const hasAgentFolderAccess = (taskOrFolderId, accessibleFolderIds) => {
 const hasTaskAccess = (task, user, context) => {
     if (!task) return false;
     if (context.isAdmin || context.isViewer) return true;
-    if (context.isRequester) return task.authorId === user.id;
+    const isChatParticipant = Array.isArray(task.chatParticipants)
+        && task.chatParticipants.some((participant) => participant.userId === user.id);
+    if (context.isRequester) return task.authorId === user.id || isChatParticipant;
     if (context.isAgent) {
         return !task.folderId
             || hasAgentFolderAccess(task, context.accessibleFolderIds)
-            || task.assignees.some((assignee) => assignee.userId === user.id);
+            || task.assignees.some((assignee) => assignee.userId === user.id)
+            || isChatParticipant;
     }
 
     return false;

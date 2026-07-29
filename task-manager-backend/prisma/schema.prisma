@@ -57,6 +57,7 @@ enum CommentVisibility {
 
 enum ChatKind {
   DIRECT
+  GROUP
   DEPARTMENT
 }
 
@@ -168,6 +169,7 @@ model User {
   chatThreadsCreated           ChatThread[]            @relation("ChatThreadCreatedBy")
   chatMemberships              ChatMember[]
   chatMessages                 ChatMessage[]
+  taskChatParticipations       TaskChatParticipant[]
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
 
@@ -254,6 +256,7 @@ model Task {
   emailOutboundMessages  EmailOutboundMessage[]
   externalReferences     TaskExternalReference[]
   timelineEvents         TaskTimelineEvent[]
+  chatParticipants       TaskChatParticipant[]
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
 
@@ -540,19 +543,62 @@ model ChatMember {
 }
 
 model ChatMessage {
-  id        String     @id @default(cuid())
-  chat      ChatThread @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  chatId    String
-  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId  String
-  content   String
-  editedAt  DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id          String           @id @default(cuid())
+  chat        ChatThread       @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId      String
+  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId    String
+  content     String
+  attachments ChatAttachment[]
+  editedAt    DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
   @@index([chatId, createdAt])
   @@index([authorId])
   @@map("chat_messages")
+}
+
+model ChatAttachment {
+  id        String      @id @default(cuid())
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  filename  String
+  path      String
+  mimeType  String?
+  sizeBytes Int?
+  createdAt DateTime    @default(now())
+
+  @@index([messageId])
+  @@map("chat_attachments")
+}
+
+model ChatSettings {
+  id                     String   @id @default("default")
+  chatsEnabled           Boolean  @default(true)
+  directChatsEnabled     Boolean  @default(true)
+  departmentChatsEnabled Boolean  @default(true)
+  ticketChatsEnabled     Boolean  @default(true)
+  attachmentsEnabled     Boolean  @default(true)
+  maxAttachmentSizeMb    Int      @default(25)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("chat_settings")
+}
+
+model TaskChatParticipant {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  addedById String?
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId, taskId])
+  @@map("task_chat_participants")
 }
 
 model EmailOutboundMessage {

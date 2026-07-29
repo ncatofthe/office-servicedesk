@@ -100,6 +100,13 @@ const TASK_SUMMARY_INCLUDE = {
     },
     author: { select: USER_PUBLIC_SELECT },
     assignees: { include: { user: { select: USER_NAME_ROLE_SELECT } } },
+    chatParticipants: {
+        select: {
+            userId: true,
+            createdAt: true,
+            user: { select: USER_NAME_ROLE_SELECT }
+        }
+    },
     externalReferences: {
         select: {
             system: true,
@@ -701,7 +708,12 @@ const getAll = async(user, filters = {}, limit = DEFAULT_TASK_LIST_LIMIT, offset
     if (accessContext.isRequester) {
         where.AND = [
             ...(where.AND || []),
-            { authorId: user.id }
+            {
+                OR: [
+                    { authorId: user.id },
+                    { chatParticipants: { some: { userId: user.id } } }
+                ]
+            }
         ];
     } else if (accessContext.isAgent && !accessContext.isAdmin) {
         where.AND = [

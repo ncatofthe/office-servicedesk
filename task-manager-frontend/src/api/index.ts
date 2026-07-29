@@ -85,6 +85,8 @@ import type {
   ChatMessage,
   ChatUser,
   AdminChatThread,
+  ChatSettings,
+  TicketChatMember,
 } from '../types';
 
 // Auth API
@@ -395,16 +397,56 @@ export const commentsApi = {
 
 // Internal chats API. Ticket conversations reuse commentsApi to keep one history.
 export const chatsApi = {
+  getSettings: () =>
+    api.get<ChatSettings>('/chats/settings').then(r => r.data),
+  updateSettings: (data: Partial<Pick<ChatSettings,
+    'chatsEnabled'
+    | 'directChatsEnabled'
+    | 'departmentChatsEnabled'
+    | 'ticketChatsEnabled'
+    | 'attachmentsEnabled'
+    | 'maxAttachmentSizeMb'
+  >>) =>
+    api.patch<ChatSettings>('/chats/admin/settings', data).then(r => r.data),
   getAll: () =>
     api.get<ChatThread[]>('/chats').then(r => r.data),
   getUsers: () =>
     api.get<ChatUser[]>('/chats/users').then(r => r.data),
   createDirect: (userId: string) =>
     api.post<ChatThread>('/chats/direct', { userId }).then(r => r.data),
+  addMember: (chatId: string, userId: string) =>
+    api.post<ChatThread>(`/chats/${chatId}/members`, { userId }).then(r => r.data),
+  removeMember: (chatId: string, userId: string) =>
+    api.delete(`/chats/${chatId}/members/${userId}`).then(r => r.data),
+  getTicketMembers: (taskId: string) =>
+    api.get<TicketChatMember[]>(`/chats/tickets/${taskId}/members`).then(r => r.data),
+  addTicketMember: (taskId: string, userId: string) =>
+    api.post<TicketChatMember[]>(`/chats/tickets/${taskId}/members`, { userId }).then(r => r.data),
+  removeTicketMember: (taskId: string, userId: string) =>
+    api.delete<TicketChatMember[]>(`/chats/tickets/${taskId}/members/${userId}`).then(r => r.data),
   getMessages: (chatId: string, params?: { limit?: number }) =>
     api.get<ChatMessage[]>(`/chats/${chatId}/messages`, { params }).then(r => r.data),
   sendMessage: (chatId: string, content: string) =>
     api.post<ChatMessage>(`/chats/${chatId}/messages`, { content }).then(r => r.data),
+  sendAttachment: (chatId: string, file: File, content?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (content?.trim()) formData.append('content', content.trim());
+    return api.post<ChatMessage>(`/chats/${chatId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+  downloadAttachment: async (attachmentId: string, fileName?: string) => {
+    const response = await api.get(`/chats/attachments/${attachmentId}/download`, { responseType: 'blob' });
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName || `chat-file-${attachmentId}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  },
   updateMessage: (chatId: string, messageId: string, content: string) =>
     api.patch<ChatMessage>(`/chats/${chatId}/messages/${messageId}`, { content }).then(r => r.data),
   deleteMessage: (chatId: string, messageId: string) =>

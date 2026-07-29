@@ -1,8 +1,9 @@
+const fs = require('fs');
 const chatService = require('../services/chat.service.js');
 
 const sendError = (res, error) => {
-    if (error.message === 'Chat not found') {
-        return res.status(404).json({ error: 'Чат не найден.' });
+    if (error.message === 'Chat not found' || error.message === 'Attachment not found') {
+        return res.status(404).json({ error: 'Чат или файл не найден.' });
     }
     if (
         error.message === 'Можно редактировать только свои сообщения.'
@@ -11,6 +12,33 @@ const sendError = (res, error) => {
         return res.status(403).json({ error: error.message });
     }
     return res.status(400).json({ error: error.message });
+};
+
+const removeUploadedFile = (file) => {
+    if (!file?.path) return;
+    try {
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    } catch (error) {
+        if (error.code !== 'ENOENT') {
+            console.warn('[chat-attachments] Failed to clean rejected upload', { error: error.message });
+        }
+    }
+};
+
+const getSettings = async(req, res) => {
+    try {
+        res.json(await chatService.getSettings());
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const updateSettings = async(req, res) => {
+    try {
+        res.json(await chatService.updateSettings(req.body));
+    } catch (error) {
+        sendError(res, error);
+    }
 };
 
 const list = async(req, res) => {
@@ -37,6 +65,46 @@ const createDirect = async(req, res) => {
     }
 };
 
+const addMember = async(req, res) => {
+    try {
+        res.json(await chatService.addMember(req.params.chatId, req.user, req.body.userId));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const removeMember = async(req, res) => {
+    try {
+        res.json(await chatService.removeMember(req.params.chatId, req.user, req.params.userId));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const listTicketMembers = async(req, res) => {
+    try {
+        res.json(await chatService.listTicketMembers(req.params.taskId, req.user));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const addTicketMember = async(req, res) => {
+    try {
+        res.json(await chatService.addTicketMember(req.params.taskId, req.user, req.body.userId));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const removeTicketMember = async(req, res) => {
+    try {
+        res.json(await chatService.removeTicketMember(req.params.taskId, req.user, req.params.userId));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
 const listMessages = async(req, res) => {
     try {
         res.json(await chatService.listMessages(req.params.chatId, req.user, req.query.limit));
@@ -48,6 +116,35 @@ const listMessages = async(req, res) => {
 const createMessage = async(req, res) => {
     try {
         res.status(201).json(await chatService.createMessage(req.params.chatId, req.user, req.body.content));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const createAttachment = async(req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Выберите файл.' });
+        }
+        res.status(201).json(await chatService.createAttachmentMessage(
+            req.params.chatId,
+            req.user,
+            req.file,
+            req.body.content
+        ));
+    } catch (error) {
+        removeUploadedFile(req.file);
+        sendError(res, error);
+    }
+};
+
+const downloadAttachment = async(req, res) => {
+    try {
+        const attachment = await chatService.getAttachmentForDownload(req.params.attachmentId, req.user);
+        if (!attachment.absolutePath || !fs.existsSync(attachment.absolutePath)) {
+            return res.status(404).json({ error: 'Файл не найден на диске.' });
+        }
+        return res.download(attachment.absolutePath, attachment.filename);
     } catch (error) {
         sendError(res, error);
     }
@@ -110,11 +207,20 @@ const deleteAdmin = async(req, res) => {
 };
 
 module.exports = {
+    getSettings,
+    updateSettings,
     list,
     listUsers,
     createDirect,
+    addMember,
+    removeMember,
+    listTicketMembers,
+    addTicketMember,
+    removeTicketMember,
     listMessages,
     createMessage,
+    createAttachment,
+    downloadAttachment,
     updateMessage,
     deleteMessage,
     markRead,

@@ -146,7 +146,19 @@ export interface CapabilityAwareUser {
   capabilities?: UserCapability[];
 }
 
-export type ChatKind = 'DIRECT' | 'DEPARTMENT';
+export type ChatKind = 'DIRECT' | 'GROUP' | 'DEPARTMENT';
+
+export interface ChatSettings {
+  id: string;
+  chatsEnabled: boolean;
+  directChatsEnabled: boolean;
+  departmentChatsEnabled: boolean;
+  ticketChatsEnabled: boolean;
+  attachmentsEnabled: boolean;
+  maxAttachmentSizeMb: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ChatUser {
   id: string;
@@ -170,9 +182,27 @@ export interface ChatMessage {
   authorId: string;
   author: ChatUser;
   content: string;
+  attachments: ChatAttachment[];
   editedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ChatAttachment {
+  id: string;
+  messageId: string;
+  filename: string;
+  path: string;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  createdAt: string;
+}
+
+export interface TicketChatMember {
+  userId: string;
+  user: ChatUser;
+  role: 'AUTHOR' | 'ASSIGNEE' | 'PARTICIPANT';
+  createdAt?: string;
 }
 
 export interface ChatThread {

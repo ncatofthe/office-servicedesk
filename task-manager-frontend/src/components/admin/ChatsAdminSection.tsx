@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, MessageCircle, RotateCcw, Search, Trash2, UserRound, Users, XCircle } from 'lucide-react';
+import { Building2, MessageCircle, RotateCcw, Save, Search, SlidersHorizontal, Trash2, UserRound, Users, XCircle } from 'lucide-react';
 import { chatsApi } from '../../api';
 import { formatDateTime } from '../../utils';
-import type { AdminChatThread, ChatKind } from '../../types';
+import type { AdminChatThread, ChatKind, ChatSettings } from '../../types';
 import { DataState } from '../ui/DataState';
 
 const getApiError = (error: unknown, fallback: string) => {
@@ -18,21 +18,55 @@ export const ChatsAdminSection: React.FC = () => {
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [settings, setSettings] = useState<ChatSettings | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      setChats(await chatsApi.getAdmin({
-        search: search.trim() || undefined,
-        kind: kind || undefined,
-      }));
+      const [chatRows, chatSettings] = await Promise.all([
+        chatsApi.getAdmin({
+          search: search.trim() || undefined,
+          kind: kind || undefined,
+        }),
+        chatsApi.getSettings(),
+      ]);
+      setChats(chatRows);
+      setSettings(chatSettings);
     } catch (loadError) {
       setError(getApiError(loadError, 'Не удалось загрузить список чатов.'));
     } finally {
       setLoading(false);
     }
   }, [kind, search]);
+
+  const updateSetting = <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => {
+    setSettings((current) => current ? { ...current, [key]: value } : current);
+  };
+
+  const saveSettings = async () => {
+    if (!settings) return;
+    setSettingsSaving(true);
+    setError('');
+    setNotice('');
+    try {
+      const updated = await chatsApi.updateSettings({
+        chatsEnabled: settings.chatsEnabled,
+        directChatsEnabled: settings.directChatsEnabled,
+        departmentChatsEnabled: settings.departmentChatsEnabled,
+        ticketChatsEnabled: settings.ticketChatsEnabled,
+        attachmentsEnabled: settings.attachmentsEnabled,
+        maxAttachmentSizeMb: settings.maxAttachmentSizeMb,
+      });
+      setSettings(updated);
+      setNotice('Настройки чатов сохранены.');
+    } catch (saveError) {
+      setError(getApiError(saveError, 'Не удалось сохранить настройки чатов.'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
@@ -41,7 +75,7 @@ export const ChatsAdminSection: React.FC = () => {
 
   const totals = useMemo(() => ({
     chats: chats.length,
-    direct: chats.filter((chat) => chat.kind === 'DIRECT').length,
+    direct: chats.filter((chat) => chat.kind === 'DIRECT' || chat.kind === 'GROUP').length,
     department: chats.filter((chat) => chat.kind === 'DEPARTMENT').length,
     messages: chats.reduce((sum, chat) => sum + chat.messageCount, 0),
   }), [chats]);
@@ -112,10 +146,74 @@ export const ChatsAdminSection: React.FC = () => {
         <div className="rounded-[12px] border border-[#f3c4c4] bg-[#fff4f4] px-4 py-3 text-sm text-[#b23b3b]">{error}</div>
       )}
 
+      {settings && (
+        <div className="rounded-[16px] border border-[#dcdcdc] bg-white p-4 sm:p-5" data-testid="admin-chat-settings">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={18} className="text-[#4a4a4a]" />
+                <h3 className="text-base font-semibold text-[#242424]">Доступность и файлы</h3>
+              </div>
+              <p className="mt-1 text-sm leading-6 text-[#777]">Изменения применяются ко всем пользователям портала.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary inline-flex items-center gap-2"
+              onClick={() => void saveSettings()}
+              disabled={settingsSaving}
+            >
+              <Save size={15} />
+              {settingsSaving ? 'Сохраняем…' : 'Сохранить'}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {[
+              { key: 'chatsEnabled' as const, title: 'Раздел «Чаты»', hint: 'Главный переключатель мессенджера.' },
+              { key: 'directChatsEnabled' as const, title: 'Личные и групповые', hint: 'Диалоги между сотрудниками.' },
+              { key: 'departmentChatsEnabled' as const, title: 'Чаты отделов', hint: 'Состав берётся из настроек отделов.' },
+              { key: 'ticketChatsEnabled' as const, title: 'Чаты заявок', hint: 'Переписка остаётся частью заявки.' },
+              { key: 'attachmentsEnabled' as const, title: 'Вложения файлов', hint: 'Файлы доступны только участникам.' },
+            ].map((item) => (
+              <label key={item.key} className="flex cursor-pointer items-start gap-3 rounded-[12px] border border-[#e4e4e4] bg-[#fafafa] p-3">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={settings[item.key]}
+                  onChange={(event) => updateSetting(item.key, event.target.checked)}
+                  disabled={settingsSaving || (item.key !== 'chatsEnabled' && !settings.chatsEnabled)}
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-[#303030]">{item.title}</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-[#858585]">{item.hint}</span>
+                </span>
+              </label>
+            ))}
+
+            <label className="rounded-[12px] border border-[#e4e4e4] bg-[#fafafa] p-3">
+              <span className="block text-sm font-semibold text-[#303030]">Максимальный размер файла</span>
+              <span className="mt-0.5 block text-xs leading-5 text-[#858585]">От 1 до 50 МБ на одно вложение.</span>
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  className="input w-24"
+                  value={settings.maxAttachmentSizeMb}
+                  onChange={(event) => updateSetting('maxAttachmentSizeMb', Math.min(50, Math.max(1, Number(event.target.value) || 1)))}
+                  disabled={settingsSaving || !settings.attachmentsEnabled || !settings.chatsEnabled}
+                />
+                <span className="text-sm text-[#696969]">МБ</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           { label: 'Всего чатов', value: totals.chats },
-          { label: 'Личных', value: totals.direct },
+          { label: 'Личных и групповых', value: totals.direct },
           { label: 'Отделов', value: totals.department },
           { label: 'Сообщений', value: totals.messages },
         ].map((item) => (
@@ -139,6 +237,7 @@ export const ChatsAdminSection: React.FC = () => {
         <select className="input" value={kind} onChange={(event) => setKind(event.target.value as '' | ChatKind)}>
           <option value="">Все типы</option>
           <option value="DIRECT">Личные чаты</option>
+          <option value="GROUP">Групповые чаты</option>
           <option value="DEPARTMENT">Чаты отделов</option>
         </select>
       </div>
@@ -150,7 +249,7 @@ export const ChatsAdminSection: React.FC = () => {
       ) : (
         <div className="space-y-3">
           {chats.map((chat) => {
-            const DepartmentIcon = chat.kind === 'DEPARTMENT' ? Building2 : UserRound;
+            const DepartmentIcon = chat.kind === 'DEPARTMENT' ? Building2 : chat.kind === 'GROUP' ? Users : UserRound;
             return (
               <div key={chat.id} className="rounded-[14px] border border-[#dedede] bg-white p-4">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -163,7 +262,7 @@ export const ChatsAdminSection: React.FC = () => {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="break-words text-sm font-semibold text-[#242424]">{chat.title}</h3>
-                        <span className="chip">{chat.kind === 'DEPARTMENT' ? 'Отдел' : 'Личный'}</span>
+                        <span className="chip">{chat.kind === 'DEPARTMENT' ? 'Отдел' : chat.kind === 'GROUP' ? 'Группа' : 'Личный'}</span>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#7d7d7d]">
                         <span className="inline-flex items-center gap-1"><Users size={13} /> {chat.memberCount} участников</span>
