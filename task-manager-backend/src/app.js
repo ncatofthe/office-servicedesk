@@ -49,6 +49,7 @@ const reportsRoutes = require('./routes/reports.routes.js');
 const servicedeskRoutes = require('./routes/servicedesk.routes.js');
 const knowledgeRoutes = require('./routes/knowledge.routes.js');
 const cannedReplyRoutes = require('./routes/canned-reply.routes.js');
+const chatRoutes = require('./routes/chat.routes.js');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -62,6 +63,7 @@ app.use('/api', reportsRoutes);
 app.use('/api', servicedeskRoutes);
 app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api', cannedReplyRoutes);
+app.use('/api/chats', chatRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {

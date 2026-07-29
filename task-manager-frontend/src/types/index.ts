@@ -146,6 +146,67 @@ export interface CapabilityAwareUser {
   capabilities?: UserCapability[];
 }
 
+export type ChatKind = 'DIRECT' | 'DEPARTMENT';
+
+export interface ChatUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  position?: string | null;
+  isActive: boolean;
+}
+
+export interface ChatMember {
+  userId: string;
+  user: ChatUser;
+  lastReadAt?: string | null;
+  joinedAt?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  chatId: string;
+  authorId: string;
+  author: ChatUser;
+  content: string;
+  editedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatThread {
+  id: string;
+  kind: ChatKind;
+  title?: string | null;
+  department?: {
+    id: string;
+    name: string;
+    isActive: boolean;
+  } | null;
+  members: ChatMember[];
+  lastMessage?: ChatMessage | null;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminChatThread {
+  id: string;
+  kind: ChatKind;
+  title: string;
+  department?: {
+    id: string;
+    name: string;
+    isActive: boolean;
+  } | null;
+  members: Array<Pick<ChatMember, 'userId' | 'user'>>;
+  memberCount: number;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ServiceDeskDictionaryItem {
   id: string;
   name: string;

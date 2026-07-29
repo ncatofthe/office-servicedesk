@@ -81,6 +81,10 @@ import type {
   ProductSettings,
   ProductSettingsAdmin,
   UpdateProductSettingsInput,
+  ChatThread,
+  ChatMessage,
+  ChatUser,
+  AdminChatThread,
 } from '../types';
 
 // Auth API
@@ -387,6 +391,34 @@ export const commentsApi = {
     api.put<TaskComment>(`/comments/${id}`, { content }).then(r => r.data),
   delete: (id: string) =>
     api.delete(`/comments/${id}`).then(r => r.data),
+};
+
+// Internal chats API. Ticket conversations reuse commentsApi to keep one history.
+export const chatsApi = {
+  getAll: () =>
+    api.get<ChatThread[]>('/chats').then(r => r.data),
+  getUsers: () =>
+    api.get<ChatUser[]>('/chats/users').then(r => r.data),
+  createDirect: (userId: string) =>
+    api.post<ChatThread>('/chats/direct', { userId }).then(r => r.data),
+  getMessages: (chatId: string, params?: { limit?: number }) =>
+    api.get<ChatMessage[]>(`/chats/${chatId}/messages`, { params }).then(r => r.data),
+  sendMessage: (chatId: string, content: string) =>
+    api.post<ChatMessage>(`/chats/${chatId}/messages`, { content }).then(r => r.data),
+  updateMessage: (chatId: string, messageId: string, content: string) =>
+    api.patch<ChatMessage>(`/chats/${chatId}/messages/${messageId}`, { content }).then(r => r.data),
+  deleteMessage: (chatId: string, messageId: string) =>
+    api.delete(`/chats/${chatId}/messages/${messageId}`).then(r => r.data),
+  markRead: (chatId: string) =>
+    api.post(`/chats/${chatId}/read`).then(r => r.data),
+  getUnreadCount: () =>
+    api.get<{ count: number }>('/chats/unread-count').then(r => r.data.count || 0),
+  getAdmin: (params?: { search?: string; kind?: string }) =>
+    api.get<AdminChatThread[]>('/chats/admin', { params }).then(r => r.data),
+  clearAdmin: (chatId: string) =>
+    api.delete(`/chats/admin/${chatId}/messages`).then(r => r.data),
+  deleteAdmin: (chatId: string) =>
+    api.delete(`/chats/admin/${chatId}`).then(r => r.data),
 };
 
 // Files API

@@ -12,6 +12,7 @@ import { AutomationRulesAdminSection } from '../components/admin/AutomationRules
 import { EmailOutboxAdminSection } from '../components/admin/EmailOutboxAdminSection';
 import { FreshdeskImportAdminSection } from '../components/admin/FreshdeskImportAdminSection';
 import { ProductSettingsAdminSection } from '../components/admin/ProductSettingsAdminSection';
+import { ChatsAdminSection } from '../components/admin/ChatsAdminSection';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
@@ -30,7 +31,7 @@ import type {
 } from '../types';
 
 type DirectoryKey = 'folders' | 'types' | 'subtypes' | 'entities' | 'teams';
-type AdminSectionKey = DirectoryKey | 'productSettings' | 'automation' | 'emailOutbox' | 'freshdeskImport';
+type AdminSectionKey = DirectoryKey | 'productSettings' | 'automation' | 'emailOutbox' | 'freshdeskImport' | 'chats';
 type DirectoryItem = ServiceDeskFolder | ServiceDeskTicketType | ServiceDeskTicketSubtype | ServiceDeskEntity | ServiceDeskTeam;
 
 const directoryCopy: Record<DirectoryKey, { tab: string; createTitle: string; editTitle: string; hint: string }> = {
@@ -231,7 +232,8 @@ export const ServiceDeskAdminPage: React.FC = () => {
   const isAutomationTab = activeKey === 'automation';
   const isEmailOutboxTab = activeKey === 'emailOutbox';
   const isFreshdeskImportTab = activeKey === 'freshdeskImport';
-  const isSpecialTab = isProductSettingsTab || isAutomationTab || isEmailOutboxTab || isFreshdeskImportTab;
+  const isChatsTab = activeKey === 'chats';
+  const isSpecialTab = isProductSettingsTab || isAutomationTab || isEmailOutboxTab || isFreshdeskImportTab || isChatsTab;
   const activeDirectoryKey: DirectoryKey = isSpecialTab ? 'folders' : activeKey;
   const activeConfig = configs.find((config) => config.key === activeDirectoryKey) || configs[0];
   const activeItems = isSpecialTab ? [] : itemsByKey[activeDirectoryKey];
@@ -242,6 +244,7 @@ export const ServiceDeskAdminPage: React.FC = () => {
   const tabs = useMemo(
     () => [
       { key: 'productSettings', label: 'Компания и портал' },
+      { key: 'chats', label: 'Чаты' },
       ...configs.map((config) => ({ key: config.key, label: config.title })),
       { key: 'automation', label: 'Автоматизация' },
       { key: 'emailOutbox', label: 'Почта' },
@@ -589,6 +592,8 @@ export const ServiceDeskAdminPage: React.FC = () => {
 
       {isProductSettingsTab ? (
         <ProductSettingsAdminSection />
+      ) : isChatsTab ? (
+        <ChatsAdminSection />
       ) : isAutomationTab ? (
         <AutomationRulesAdminSection />
       ) : isEmailOutboxTab ? (

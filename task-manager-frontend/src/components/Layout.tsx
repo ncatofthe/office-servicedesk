@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, BookOpen, ChevronRight, Home, LifeBuoy, Plus, Ticket } from 'lucide-react';
+import { Bell, BookOpen, ChevronRight, Home, LifeBuoy, MessageCircle, Plus, Ticket } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
-import { notificationsApi } from '../api';
+import { chatsApi, notificationsApi } from '../api';
 import type { Notification } from '../types';
 import { APP_NAV_ITEMS, canAccessModule, canCreateTasks } from '../access';
 import { formatDateTime, getInitials, getRoleLabel } from '../utils';
@@ -141,6 +141,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsReady, setNotificationsReady] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
@@ -212,6 +213,23 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
     return () => window.clearInterval(timer);
   }, [syncUnreadCount]);
+
+  useEffect(() => {
+    const syncChatUnreadCount = async () => {
+      try {
+        setChatUnreadCount(await chatsApi.getUnreadCount());
+      } catch {
+        setChatUnreadCount(0);
+      }
+    };
+
+    void syncChatUnreadCount();
+    const timer = window.setInterval(() => {
+      void syncChatUnreadCount();
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, [location.pathname]);
 
   useEffect(() => {
     const handleProfileExtrasUpdated = (event: Event) => {
@@ -318,7 +336,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     >
       <header className="sticky top-0 z-30 px-3 pb-3 pt-3 backdrop-blur-sm sm:px-4 sm:pb-4 sm:pt-4">
         <div className="mx-auto max-w-[1440px] rounded-[18px] border border-white/80 bg-[rgba(255,255,255,0.9)] px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.08)] sm:px-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 min-[1200px]:grid-cols-[minmax(160px,210px)_minmax(0,1fr)_auto] min-[1200px]:gap-x-4">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3">
             <Link to="/" className="flex min-w-0 items-center gap-3 rounded-[14px] transition-opacity hover:opacity-85" aria-label="На главную">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] bg-[#2f2f2f] text-white shadow-[0_10px_22px_rgba(0,0,0,0.17)]">
                 <LifeBuoy size={21} />
@@ -335,8 +353,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </div>
             </Link>
 
-            <nav className="col-span-2 row-start-2 min-w-0 min-[1200px]:col-span-1 min-[1200px]:col-start-2 min-[1200px]:row-start-1">
-              <div className="flex max-w-full gap-2 overflow-x-auto pb-1 min-[1200px]:flex-wrap min-[1200px]:items-center min-[1200px]:justify-center min-[1200px]:overflow-visible min-[1200px]:pb-0">
+            <nav className="col-span-2 row-start-2 min-w-0">
+              <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1 lg:justify-center">
                 {visibleNavItems.map((item) => {
                   const active = location.pathname === item.path || (item.path === '/tickets' && location.pathname === '/tasks') || (item.path === '/queue' && location.pathname === '/kanban');
                   const RequesterNavIcon = isRequester
@@ -348,25 +366,33 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                           ? BookOpen
                           : null
                     : null;
+                  const NavIcon = item.path === '/chats' ? MessageCircle : RequesterNavIcon;
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3 text-center text-sm font-medium transition-all min-[1200px]:h-9 min-[1200px]:px-2.5 min-[1200px]:text-[13px] min-[1380px]:px-3 min-[1380px]:text-sm ${
+                      className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3 text-center text-sm font-medium transition-all ${
                         active
                           ? 'border-[#2f2f2f] bg-[#2f2f2f] text-white shadow-[0_10px_20px_rgba(0,0,0,0.14)]'
                           : 'border-[#dddddd] bg-white/90 text-[#3f3f3f] hover:border-[#c3c3c3] hover:bg-white'
                       }`}
                     >
-                      {RequesterNavIcon && <RequesterNavIcon size={15} />}
+                      {NavIcon && <NavIcon size={15} />}
                       <span>{item.label}</span>
+                      {item.path === '/chats' && chatUnreadCount > 0 && (
+                        <span className={`flex min-h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
+                          active ? 'bg-white text-[#2f2f2f]' : 'bg-[#2f2f2f] text-white'
+                        }`}>
+                          {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
               </div>
             </nav>
 
-            <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-end gap-2 min-[1200px]:col-start-3">
+            <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-end gap-2">
               {canCreateTasks(user?.role) && (
                 <>
                   <Link

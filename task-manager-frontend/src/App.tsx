@@ -16,6 +16,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ defa
 const ServiceDeskAdminPage = lazy(() => import('./pages/ServiceDeskAdminPage').then((m) => ({ default: m.ServiceDeskAdminPage })));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage').then((m) => ({ default: m.KnowledgePage })));
 const CannedRepliesPage = lazy(() => import('./pages/CannedRepliesPage').then((m) => ({ default: m.CannedRepliesPage })));
+const ChatsPage = lazy(() => import('./pages/ChatsPage').then((m) => ({ default: m.ChatsPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -94,6 +95,16 @@ const AppRoutes: React.FC = () => {
             <ProtectedRoute>
               <Layout>
                 <TasksPage />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chats"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <ChatsPage />
               </Layout>
             </ProtectedRoute>
           }

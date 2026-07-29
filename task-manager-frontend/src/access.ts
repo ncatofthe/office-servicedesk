@@ -9,7 +9,8 @@ export type AppModuleKey =
   | 'cannedReplies'
   | 'team'
   | 'admin'
-  | 'reports';
+  | 'reports'
+  | 'chats';
 
 export type ModuleVisibility = 'hidden' | 'read-only' | 'full';
 
@@ -26,6 +27,7 @@ export const ROLE_MODULE_MATRIX: RoleModuleMatrix = {
     team: 'full',
     admin: 'full',
     reports: 'full',
+    chats: 'full',
   },
   AGENT: {
     dashboard: 'full',
@@ -37,6 +39,7 @@ export const ROLE_MODULE_MATRIX: RoleModuleMatrix = {
     team: 'hidden',
     admin: 'hidden',
     reports: 'hidden',
+    chats: 'full',
   },
   REQUESTER: {
     dashboard: 'full',
@@ -48,6 +51,7 @@ export const ROLE_MODULE_MATRIX: RoleModuleMatrix = {
     team: 'hidden',
     admin: 'hidden',
     reports: 'hidden',
+    chats: 'full',
   },
   VIEWER: {
     dashboard: 'read-only',
@@ -59,12 +63,14 @@ export const ROLE_MODULE_MATRIX: RoleModuleMatrix = {
     team: 'hidden',
     admin: 'hidden',
     reports: 'full',
+    chats: 'full',
   },
 };
 
 export const APP_NAV_ITEMS: Array<{ path: string; label: string; moduleKey: Exclude<AppModuleKey, 'create'> }> = [
   { path: '/', label: 'Главная', moduleKey: 'dashboard' },
   { path: '/tickets', label: 'Заявки', moduleKey: 'tasks' },
+  { path: '/chats', label: 'Чаты', moduleKey: 'chats' },
   { path: '/queue', label: 'Очередь', moduleKey: 'kanban' },
   { path: '/knowledge', label: 'База знаний', moduleKey: 'knowledge' },
   { path: '/canned-replies', label: 'Шаблоны ответов', moduleKey: 'cannedReplies' },
