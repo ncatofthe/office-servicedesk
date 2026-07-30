@@ -45,10 +45,10 @@ type TicketTimelineItem =
   | { type: 'file'; id: string; createdAt: string; file: TaskAttachment };
 
 const FILTERS: Array<{ key: ChatFilter; label: string }> = [
-  { key: 'all', label: 'Все' },
-  { key: 'direct', label: 'Люди' },
+  { key: 'all', label: 'Все чаты' },
+  { key: 'direct', label: 'Личные' },
   { key: 'department', label: 'Отделы' },
-  { key: 'ticket', label: 'Заявки' },
+  { key: 'ticket', label: 'По заявкам' },
 ];
 
 const DEFAULT_SETTINGS: ChatSettings = {
@@ -310,6 +310,12 @@ export const ChatsPage: React.FC = () => {
       (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime()
     );
   }, [filter, search, threads, tickets, user?.id]);
+  const folderCounts = useMemo<Record<ChatFilter, number>>(() => ({
+    all: threads.length + tickets.length,
+    direct: threads.filter((chat) => ['DIRECT', 'GROUP'].includes(chat.kind)).length,
+    department: threads.filter((chat) => chat.kind === 'DEPARTMENT').length,
+    ticket: tickets.length,
+  }), [threads, tickets]);
 
   useEffect(() => {
     if (!selection && conversationItems[0]) {
@@ -531,19 +537,19 @@ export const ChatsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="h-[calc(100dvh-118px)] min-h-[590px] overflow-hidden rounded-[18px] border border-[#dededb] bg-white shadow-[0_18px_50px_rgba(27,31,36,0.08)] md:h-[calc(100dvh-90px)]">
-        <div className="grid h-full min-h-0 md:grid-cols-[350px,minmax(0,1fr)]">
-          <aside className={`${selection ? 'hidden md:flex' : 'flex'} min-h-0 flex-col border-r border-[#e5e5e2] bg-[#fbfbfa]`}>
-            <div className="border-b border-[#e8e8e5] bg-white px-3 pb-3 pt-3.5">
-              <div className="flex items-center justify-between gap-3 px-1">
+      <div className="h-[calc(100dvh-118px)] min-h-[590px] overflow-hidden rounded-[14px] border border-[#d8d8d5] bg-white shadow-[0_18px_50px_rgba(27,31,36,0.1)] md:h-[calc(100dvh-90px)]">
+        <div className="grid h-full min-h-0 md:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className={`${selection ? 'hidden md:flex' : 'flex'} min-h-0 flex-col bg-[#292d33] text-white`}>
+            <div className="shrink-0 px-4 pb-3 pt-4">
+              <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-[#222]">Чаты</h1>
-                  <p className="mt-0.5 truncate text-[11px] text-[#92928d]">Люди, отделы и заявки</p>
+                  <h1 className="text-[18px] font-semibold tracking-[-0.02em] text-white">Сообщения</h1>
+                  <p className="mt-0.5 truncate text-[11px] text-white/45">Рабочие переписки</p>
                 </div>
                 {settings.directChatsEnabled && (
                   <button
                     type="button"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] text-white shadow-[0_6px_16px_rgba(45,60,84,0.2)] transition hover:bg-[#223046]"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white text-[#292d33] transition hover:bg-[#f0f0ed]"
                     onClick={() => setNewChatOpen(true)}
                     aria-label="Новый диалог"
                     title="Новый диалог"
@@ -553,44 +559,67 @@ export const ChatsPage: React.FC = () => {
                 )}
               </div>
               <div className="relative">
-                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a95]" />
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35" />
                 <input
-                  className="mt-3 h-10 w-full rounded-[11px] border border-[#e3e3e0] bg-[#f6f6f4] pl-9 pr-3 text-[13px] text-[#292929] outline-none transition placeholder:text-[#a1a19c] focus:border-[#b8bec7] focus:bg-white focus:ring-4 focus:ring-[#2d3c54]/5"
+                  className="mt-3 h-10 w-full rounded-[10px] border border-white/5 bg-white/[0.07] pl-9 pr-3 text-[13px] text-white outline-none transition placeholder:text-white/35 focus:border-white/15 focus:bg-white/10"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Поиск"
+                  placeholder="Найти чат или сотрудника"
                 />
               </div>
-              <div className="mt-2.5 flex gap-1 overflow-x-auto">
+            </div>
+
+            <div className="shrink-0 border-y border-white/[0.07] px-3 py-3">
+              <div className="mb-2 flex items-center justify-between px-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/45">Папки</p>
+                <span className="text-[10px] text-white/30">{folderCounts.all}</span>
+              </div>
+              <div className="space-y-0.5">
                 {FILTERS.filter((item) => (
                   item.key === 'all'
                   || (item.key === 'direct' && settings.directChatsEnabled)
                   || (item.key === 'department' && settings.departmentChatsEnabled)
                   || (item.key === 'ticket' && settings.ticketChatsEnabled)
-                )).map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => {
-                      setFilter(item.key);
-                      setSelection(null);
-                    }}
-                    className={`h-7 shrink-0 rounded-full px-2.5 text-[11px] font-medium transition ${
-                      filter === item.key ? 'bg-[#2d3c54] text-white' : 'text-[#74746f] hover:bg-[#efefec] hover:text-[#333]'
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+                )).map((item) => {
+                  const FolderIcon = item.key === 'all'
+                    ? MessageCircle
+                    : item.key === 'direct'
+                      ? UserRound
+                      : item.key === 'department'
+                        ? Building2
+                        : Ticket;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        setFilter(item.key);
+                        setSelection(null);
+                      }}
+                      className={`flex h-9 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[12px] font-medium transition ${
+                        filter === item.key ? 'bg-white/[0.12] text-white' : 'text-white/60 hover:bg-white/[0.07] hover:text-white'
+                      }`}
+                    >
+                      <FolderIcon size={14} strokeWidth={1.8} />
+                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                      <span className={`text-[10px] ${filter === item.key ? 'text-white/65' : 'text-white/30'}`}>{folderCounts[item.key]}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-              {loading ? (
-                <DataState variant="loading" message="Загружаем диалоги..." />
-              ) : conversationItems.length === 0 ? (
-                <DataState variant="empty" message="Переписок пока нет. Создайте диалог или откройте чат заявки." />
-              ) : (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-3.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/45">Диалоги</p>
+                <span className="text-[10px] text-white/30">{conversationItems.length}</span>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
+                {loading ? (
+                  <p className="px-3 py-6 text-center text-xs text-white/40">Загружаем диалоги...</p>
+                ) : conversationItems.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-xs leading-5 text-white/40">В этой папке пока нет переписок.</p>
+                ) : (
                 <div className="space-y-0.5">
                   {conversationItems.map((item) => {
                     const active = selection?.type === item.type && selection.id === item.id;
@@ -608,17 +637,18 @@ export const ChatsPage: React.FC = () => {
                         key={`${item.type}:${item.id}`}
                         type="button"
                         onClick={() => setSelection({ type: item.type, id: item.id })}
-                        className={`w-full rounded-[13px] px-2.5 py-2.5 text-left transition ${
-                          active ? 'bg-[#e9edf2] shadow-[inset_0_0_0_1px_rgba(45,60,84,0.05)]' : 'hover:bg-[#f1f1ef]'
+                        className={`relative w-full rounded-[10px] px-2.5 py-2.5 text-left transition ${
+                          active ? 'bg-white/[0.13]' : 'hover:bg-white/[0.07]'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
+                        {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-white" />}
+                        <div className="flex items-center gap-2.5">
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                             isTicket
-                              ? 'bg-[#f3e9da] text-[#6e5a3c]'
+                              ? 'bg-[#e9dfcf] text-[#62533e]'
                               : item.chat.kind === 'DEPARTMENT'
-                                ? 'bg-[#e1eceb] text-[#41615f]'
-                                : 'bg-[#2d3c54] text-white'
+                                ? 'bg-[#d9e5e3] text-[#3f5a57]'
+                                : 'bg-white/15 text-white'
                           }`}>
                             {!isTicket && item.chat.kind === 'DIRECT'
                               ? getInitials(getDirectPeer(item.chat, user?.id)?.name || title)
@@ -626,13 +656,13 @@ export const ChatsPage: React.FC = () => {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <p className="truncate text-[13px] font-semibold text-[#252525]">{title}</p>
-                              <span className="ml-auto shrink-0 text-[10px] font-medium text-[#a0a09b]">{formatConversationTime(item.timestamp)}</span>
+                              <p className={`truncate text-[12px] ${unread > 0 ? 'font-semibold text-white' : 'font-medium text-white/85'}`}>{title}</p>
+                              <span className="ml-auto shrink-0 text-[9px] font-medium text-white/30">{formatConversationTime(item.timestamp)}</span>
                             </div>
                             <div className="mt-0.5 flex items-center gap-2">
-                              <p className={`min-w-0 flex-1 truncate text-[11px] ${unread > 0 ? 'font-medium text-[#4e5765]' : 'text-[#858580]'}`}>{preview}</p>
+                              <p className={`min-w-0 flex-1 truncate text-[10px] ${unread > 0 ? 'font-medium text-white/65' : 'text-white/35'}`}>{preview}</p>
                               {unread > 0 && (
-                                <span className="flex min-h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] px-1 text-[9px] text-white">
+                                <span className="flex min-h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-white px-1 text-[9px] font-semibold text-[#292d33]">
                                   {unread > 99 ? '99+' : unread}
                                 </span>
                               )}
@@ -643,11 +673,12 @@ export const ChatsPage: React.FC = () => {
                     );
                   })}
                 </div>
-              )}
+                )}
+              </div>
             </div>
           </aside>
 
-          <section className={`${selection ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col bg-[#f3f5f7]`}>
+          <section className={`${selection ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col bg-white`}>
             {!selection ? (
               <div className="flex flex-1 items-center justify-center p-8">
                 <div className="max-w-sm text-center">
@@ -660,7 +691,7 @@ export const ChatsPage: React.FC = () => {
               </div>
             ) : (
               <>
-                <header className="flex min-h-[68px] items-center gap-3 border-b border-[#e5e5e2] bg-white/95 px-3 py-2.5 backdrop-blur sm:px-5">
+                <header className="flex min-h-[66px] shrink-0 items-center gap-3 border-b border-[#e8e8e5] bg-white px-3 py-2.5 sm:px-5">
                   <button type="button" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#555] hover:bg-[#f1f1ef] md:hidden" onClick={() => setSelection(null)} aria-label="Назад">
                     <ArrowLeft size={17} className="mx-auto" />
                   </button>
@@ -681,10 +712,10 @@ export const ChatsPage: React.FC = () => {
                     type="button"
                     className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]"
                     onClick={() => setMembersOpen(true)}
-                    title="Участники переписки"
+                    title="Настройки переписки"
                   >
-                    <UserPlus size={16} />
-                    <span className="hidden lg:inline">Участники</span>
+                    <Settings2 size={16} />
+                    <span className="hidden lg:inline">Настройки</span>
                   </button>
                   {selectedTicket && (
                     <button type="button" className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]" onClick={() => navigate(`/tickets?taskId=${selectedTicket.id}`)}>
@@ -695,10 +726,10 @@ export const ChatsPage: React.FC = () => {
                 </header>
 
                 <div
-                  className="min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-7"
+                  className="min-h-0 flex-1 overflow-y-auto bg-[#fbfbfa] px-3 py-5 sm:px-7"
                   style={{
                     backgroundImage:
-                      'radial-gradient(circle at 12% 8%, rgba(255,255,255,0.75), transparent 28%), radial-gradient(circle at 88% 92%, rgba(224,229,236,0.55), transparent 30%)',
+                      'radial-gradient(circle at 12% 8%, rgba(255,255,255,0.95), transparent 30%), radial-gradient(circle at 88% 92%, rgba(232,234,236,0.42), transparent 32%)',
                   }}
                 >
                   {messagesLoading ? (
@@ -836,11 +867,11 @@ export const ChatsPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="bg-[#f3f5f7] px-3 pb-3 pt-2 sm:px-7 sm:pb-4">
+                <div className="shrink-0 border-t border-[#e8e8e5] bg-white px-3 py-3 sm:px-6">
                   {canSend ? (
                     <div className="mx-auto max-w-4xl">
                       {selectedFile && (
-                        <div className="mb-2 flex items-center gap-3 rounded-[12px] border border-[#dfe2e5] bg-white px-3 py-2 shadow-sm">
+                        <div className="mb-2 flex items-center gap-3 rounded-[10px] border border-[#e1e2df] bg-[#f7f7f5] px-3 py-2">
                           <FileText size={17} className="shrink-0 text-[#606060]" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-[#333]">{selectedFile.name}</p>
@@ -851,7 +882,7 @@ export const ChatsPage: React.FC = () => {
                           </button>
                         </div>
                       )}
-                      <div className="flex items-end gap-1.5 rounded-[18px] border border-[#d8dce1] bg-white p-1.5 shadow-[0_8px_26px_rgba(35,40,46,0.09)] transition focus-within:border-[#aeb7c3] focus-within:shadow-[0_9px_28px_rgba(45,60,84,0.12)]">
+                      <div className="flex items-end gap-1.5 rounded-[12px] border border-[#dedfdb] bg-[#f7f7f5] p-1.5 transition focus-within:border-[#aeb3b9] focus-within:bg-white">
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -860,7 +891,7 @@ export const ChatsPage: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#737981] transition hover:bg-[#f1f3f5] hover:text-[#2d3c54]"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] text-[#73766f] transition hover:bg-white hover:text-[#2d3c54]"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={!settings.attachmentsEnabled || sending}
                           title={settings.attachmentsEnabled ? `Прикрепить файл до ${settings.maxAttachmentSizeMb} МБ` : 'Вложения отключены'}
@@ -883,7 +914,7 @@ export const ChatsPage: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] text-white transition hover:bg-[#223046] disabled:cursor-not-allowed disabled:opacity-35"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] bg-[#2d3c54] text-white transition hover:bg-[#223046] disabled:cursor-not-allowed disabled:opacity-35"
                           onClick={() => void sendMessage()}
                           disabled={sending || (!draft.trim() && !selectedFile)}
                           aria-label="Отправить"
@@ -891,7 +922,6 @@ export const ChatsPage: React.FC = () => {
                           <Send size={17} />
                         </button>
                       </div>
-                      <p className="mt-1.5 hidden px-2 text-[9px] text-[#9b9ea2] sm:block">Enter — отправить · Shift + Enter — новая строка</p>
                     </div>
                   ) : (
                     <p className="text-center text-sm text-[#858585]">Для вашей роли переписка доступна только для чтения.</p>
