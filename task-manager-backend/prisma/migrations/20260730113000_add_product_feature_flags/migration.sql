@@ -1,0 +1,15 @@
+ALTER TABLE "product_settings"
+ADD COLUMN "dashboardEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "ticketsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "ticketCreationEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "queueEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "knowledgeEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "cannedRepliesEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "chatsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "teamEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "reportsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "notificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "automationEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "emailEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "taskAttachmentsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "freshdeskImportEnabled" BOOLEAN NOT NULL DEFAULT true;

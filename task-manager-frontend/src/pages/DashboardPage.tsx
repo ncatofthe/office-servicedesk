@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { dashboardApi, tasksApi } from '../api';
 import { ChartSurface } from '../components/ui/ChartSurface';
 import { useAuth } from '../contexts/AuthContext';
+import { useProductSettings } from '../contexts/ProductSettingsContext';
 import type { DashboardData, TaskSummary } from '../types';
 import { getRoleLabel, getStatusLabel, priorityLabels } from '../utils';
 
@@ -86,26 +87,36 @@ const Chip: React.FC<{ text: string }> = ({ text }) => (
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
+  const { isFeatureEnabled } = useProductSettings();
   const [data, setData] = useState<DashboardData | null>(null);
   const [recentTasks, setRecentTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const isRequester = user?.role === 'REQUESTER';
+  const ticketsEnabled = isFeatureEnabled('tickets');
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        if (isRequester) {
+        if (isRequester && ticketsEnabled) {
           const tasksResp = await tasksApi.getAll({ limit: 100, offset: 0 });
           setRecentTasks(tasksResp.tasks || []);
           setData(null);
           return;
         }
 
+        if (isRequester) {
+          setRecentTasks([]);
+          setData(null);
+          return;
+        }
+
         const [dashboard, tasksResp] = await Promise.all([
           dashboardApi.getDashboard(),
-          tasksApi.getAll({ limit: 5, offset: 0 }),
+          ticketsEnabled
+            ? tasksApi.getAll({ limit: 5, offset: 0 })
+            : Promise.resolve({ tasks: [], total: 0, limit: 5, offset: 0 }),
         ]);
         if (!dashboard || Array.isArray(dashboard) || typeof dashboard !== 'object') {
           throw new Error('Invalid dashboard payload');
@@ -120,7 +131,7 @@ export const DashboardPage: React.FC = () => {
       }
     };
     load();
-  }, [isRequester]);
+  }, [isRequester, ticketsEnabled]);
 
   const kpi = data?.kpi ?? { pending: 0, inProgress: 0, completed: 0, completionRate: '0%' };
   const totalKpi = Math.max(1, kpi.pending + kpi.inProgress + kpi.completed);
@@ -179,7 +190,8 @@ export const DashboardPage: React.FC = () => {
                 Опишите проблему или запрос — обращение попадёт нужной команде, а все ответы появятся в переписке.
               </p>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+            {isFeatureEnabled('tickets') && <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+              {isFeatureEnabled('ticketCreation') && (
               <Link
                 to="/tickets?create=1"
                 className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[12px] bg-white px-5 text-sm font-semibold text-[#1f1f1f] transition hover:bg-[#f2f2f2]"
@@ -187,6 +199,7 @@ export const DashboardPage: React.FC = () => {
                 <FilePlus2 size={18} />
                 Создать заявку
               </Link>
+              )}
               <Link
                 to="/tickets"
                 className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[12px] border border-white/25 px-5 text-sm font-medium text-white transition hover:bg-white/10"
@@ -194,7 +207,7 @@ export const DashboardPage: React.FC = () => {
                 Мои заявки
                 <ArrowRight size={16} />
               </Link>
-            </div>
+            </div>}
           </div>
         </section>
 

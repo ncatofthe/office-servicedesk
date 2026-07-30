@@ -1,5 +1,6 @@
 const prisma = require('../prisma/prisma.js');
 const { queueOutboundEmail } = require('./email-outbound.service.js');
+const productSettingsService = require('./product-settings.service.js');
 const {
     normalizeRole,
     isAdminRole,
@@ -129,6 +130,10 @@ const serializeNotification = (notification) => ({
 });
 
 const createNotificationRecord = async(payload, db = prisma) => {
+    if (!(await productSettingsService.isFeatureEnabled('notifications', db))) {
+        return null;
+    }
+
     const data = {
         userId: payload.userId,
         type: payload.type,
@@ -286,7 +291,10 @@ const buildNotificationEmailBody = ({ task, title, message }) => {
 
 const maybeQueueNotificationEmail = async({ recipient, task, title, message, eventKey, db = prisma }) => {
     const config = getNotificationConfig();
-    if (!config.emailEnabled || !recipient?.email || !task?.id) {
+    if (!config.emailEnabled
+        || !(await productSettingsService.isFeatureEnabled('email', db))
+        || !recipient?.email
+        || !task?.id) {
         return null;
     }
 

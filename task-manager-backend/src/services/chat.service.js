@@ -7,6 +7,7 @@ const {
     resolveStoredAttachmentFilename
 } = require('../utils/attachment.utils.js');
 const taskService = require('./task.service.js');
+const productSettingsService = require('./product-settings.service.js');
 
 const CHAT_USER_SELECT = {
     id: true,
@@ -79,9 +80,19 @@ const updateSettings = async(payload = {}) => {
     }
 
     await getSettings();
-    return prisma.chatSettings.update({
-        where: { id: CHAT_SETTINGS_ID },
-        data
+    return prisma.$transaction(async(tx) => {
+        if (Object.prototype.hasOwnProperty.call(data, 'chatsEnabled')) {
+            await productSettingsService.getProductSettings(tx);
+            await tx.productSettings.update({
+                where: { id: productSettingsService.PRODUCT_SETTINGS_ID },
+                data: { chatsEnabled: data.chatsEnabled }
+            });
+        }
+
+        return tx.chatSettings.update({
+            where: { id: CHAT_SETTINGS_ID },
+            data
+        });
     });
 };
 
@@ -428,7 +439,7 @@ const removeMember = async(chatId, actor, targetUserId) => {
 
 const assertTicketChatsEnabled = async() => {
     const settings = await assertChatsEnabled();
-    if (!settings.ticketChatsEnabled) {
+    if (!settings.ticketChatsEnabled || !(await productSettingsService.isFeatureEnabled('tickets'))) {
         throw new Error('Чаты заявок отключены администратором.');
     }
     return settings;

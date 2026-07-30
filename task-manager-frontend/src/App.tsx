@@ -2,8 +2,10 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProductSettingsProvider } from './contexts/ProductSettingsContext';
+import { useProductSettings } from './contexts/ProductSettingsContext';
 import { Layout } from './components/Layout';
-import { canAccessModule } from './access';
+import { canAccessModule, getDefaultAppPath, isModuleFeatureEnabled } from './access';
+import type { AppModuleKey } from './access';
 
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
@@ -36,21 +38,32 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-const ModuleRouteGuard: React.FC<{ moduleKey: 'team' | 'admin' | 'knowledge' | 'reports' | 'cannedReplies'; children: React.ReactNode }> = ({
+const ModuleRouteGuard: React.FC<{ moduleKey: AppModuleKey; children: React.ReactNode }> = ({
   moduleKey,
   children,
 }) => {
   const { user } = useAuth();
+  const { settings, isLoading } = useProductSettings();
 
-  if (!user || !canAccessModule(user.role, moduleKey)) {
-    return <Navigate to="/" replace />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-page)] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#2f2f2f] border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!user || !canAccessModule(user.role, moduleKey) || !isModuleFeatureEnabled(settings, moduleKey)) {
+    return <Navigate to={getDefaultAppPath(user?.role, settings)} replace />;
   }
 
   return <>{children}</>;
 };
 
 const AppRoutes: React.FC = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { settings } = useProductSettings();
+  const defaultPath = getDefaultAppPath(user?.role, settings);
 
   return (
     <Suspense
@@ -63,19 +76,21 @@ const AppRoutes: React.FC = () => {
       <Routes>
         <Route
           path="/login"
-          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
+          element={isAuthenticated ? <Navigate to={defaultPath} replace /> : <LoginPage />}
         />
         <Route
           path="/register"
-          element={isAuthenticated ? <Navigate to="/" replace /> : <RegisterPage />}
+          element={isAuthenticated ? <Navigate to={defaultPath} replace /> : <RegisterPage />}
         />
         <Route
           path="/"
           element={
             <ProtectedRoute>
-              <Layout>
-                <DashboardPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="dashboard">
+                <Layout>
+                  <DashboardPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -83,9 +98,11 @@ const AppRoutes: React.FC = () => {
           path="/tasks"
           element={
             <ProtectedRoute>
-              <Layout>
-                <TasksPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="tasks">
+                <Layout>
+                  <TasksPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -93,9 +110,11 @@ const AppRoutes: React.FC = () => {
           path="/tickets"
           element={
             <ProtectedRoute>
-              <Layout>
-                <TasksPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="tasks">
+                <Layout>
+                  <TasksPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -103,9 +122,11 @@ const AppRoutes: React.FC = () => {
           path="/chats"
           element={
             <ProtectedRoute>
-              <Layout>
-                <ChatsPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="chats">
+                <Layout>
+                  <ChatsPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -113,9 +134,11 @@ const AppRoutes: React.FC = () => {
           path="/kanban"
           element={
             <ProtectedRoute>
-              <Layout>
-                <KanbanPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="kanban">
+                <Layout>
+                  <KanbanPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -123,9 +146,11 @@ const AppRoutes: React.FC = () => {
           path="/queue"
           element={
             <ProtectedRoute>
-              <Layout>
-                <KanbanPage />
-              </Layout>
+              <ModuleRouteGuard moduleKey="kanban">
+                <Layout>
+                  <KanbanPage />
+                </Layout>
+              </ModuleRouteGuard>
             </ProtectedRoute>
           }
         />
@@ -199,7 +224,7 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           )}
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to={defaultPath} replace />} />
       </Routes>
     </Suspense>
   );

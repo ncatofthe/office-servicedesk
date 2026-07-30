@@ -3,11 +3,15 @@ const { body, param, query } = require('express-validator');
 const authMiddleware = require('../middlewares/auth.middleware.js');
 const roleMiddleware = require('../middlewares/role.middleware.js');
 const validate = require('../middlewares/validate.middleware.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
 const controller = require('../controllers/servicedesk.controller.js');
 
 const router = express.Router();
 
 const adminOnly = [authMiddleware, roleMiddleware(['ADMIN'])];
+const automationAdminOnly = [...adminOnly, requireFeature('automation')];
+const emailAdminOnly = [...adminOnly, requireFeature('email')];
+const freshdeskAdminOnly = [...adminOnly, requireFeature('freshdeskImport')];
 const authenticated = [authMiddleware];
 const idParam = param('id').isString().withMessage('Некорректный идентификатор.');
 const teamIdParam = param('teamId').isString().withMessage('Некорректный идентификатор команды.');
@@ -132,7 +136,9 @@ const updateProductSettingsValidation = [
     body('locale').optional().trim().isLength({ min: 2, max: 35 }).withMessage('locale должен быть от 2 до 35 символов.'),
     body('timezone').optional().trim().isLength({ min: 1, max: 100 }).withMessage('timezone должен быть от 1 до 100 символов.'),
     body('defaultPriority').optional().isIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).withMessage('defaultPriority имеет некорректное значение.'),
-    body('defaultFolderId').optional({ nullable: true }).isString().withMessage('defaultFolderId должен быть строкой или null.')
+    body('defaultFolderId').optional({ nullable: true }).isString().withMessage('defaultFolderId должен быть строкой или null.'),
+    body('features').optional().isObject().withMessage('features должен быть объектом.'),
+    body('features.*').optional().isBoolean().withMessage('Значения features должны быть boolean.')
 ];
 
 router.get('/servicedesk/product-settings', controller.getProductSettings);
@@ -150,7 +156,7 @@ router.get('/service-desk/teams', ...authenticated, controller.listActiveTeams);
 router.get('/servicedesk/admin/product-settings', ...adminOnly, controller.getAdminProductSettings);
 router.patch(
     '/servicedesk/admin/product-settings',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     updateProductSettingsValidation,
     validate,
     controller.updateProductSettings
@@ -178,19 +184,19 @@ router.post(
 );
 router.get(
     '/servicedesk/admin/freshdesk-import/source-health',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     controller.getFreshdeskSourceHealth
 );
 router.post(
     '/servicedesk/admin/freshdesk-import/pull/dry-run',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     freshdeskPullValidation,
     validate,
     controller.dryRunFreshdeskApiPull
 );
 router.post(
     '/servicedesk/admin/freshdesk-import/pull',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     freshdeskPullValidation,
     validate,
     controller.createFreshdeskApiPull
@@ -270,27 +276,27 @@ router.post(
     controller.testSlaPolicy
 );
 
-router.get('/servicedesk/admin/automation-rules', ...adminOnly, controller.listAutomationRules);
-router.get('/servicedesk/admin/automation-rules/:id', ...adminOnly, idParam, validate, controller.getAutomationRule);
+router.get('/servicedesk/admin/automation-rules', ...automationAdminOnly, controller.listAutomationRules);
+router.get('/servicedesk/admin/automation-rules/:id', ...automationAdminOnly, idParam, validate, controller.getAutomationRule);
 router.post(
     '/servicedesk/admin/automation-rules',
-    ...adminOnly,
+    ...automationAdminOnly,
     createAutomationRuleValidation,
     validate,
     controller.createAutomationRule
 );
 router.put(
     '/servicedesk/admin/automation-rules/:id',
-    ...adminOnly,
+    ...automationAdminOnly,
     idParam,
     updateAutomationRuleValidation,
     validate,
     controller.updateAutomationRule
 );
-router.delete('/servicedesk/admin/automation-rules/:id', ...adminOnly, idParam, validate, controller.deleteAutomationRule);
+router.delete('/servicedesk/admin/automation-rules/:id', ...automationAdminOnly, idParam, validate, controller.deleteAutomationRule);
 router.get(
     '/servicedesk/admin/automation-runs',
-    ...adminOnly,
+    ...automationAdminOnly,
     query('taskId').optional().isString().withMessage('taskId должен быть строкой.'),
     query('ruleId').optional().isString().withMessage('ruleId должен быть строкой.'),
     validate,
@@ -298,7 +304,7 @@ router.get(
 );
 router.post(
     '/servicedesk/admin/automation-rules/:id/test',
-    ...adminOnly,
+    ...automationAdminOnly,
     idParam,
     body('taskId').isString().withMessage('taskId обязателен.'),
     validate,
@@ -307,19 +313,19 @@ router.post(
 
 router.get(
     '/servicedesk/admin/email-outbox',
-    ...adminOnly,
+    ...emailAdminOnly,
     emailOutboxListValidation,
     validate,
     controller.listEmailOutbox
 );
 router.get(
     '/servicedesk/admin/email-health',
-    ...adminOnly,
+    ...emailAdminOnly,
     controller.getEmailHealth
 );
 router.post(
     '/servicedesk/admin/email-outbox/:id/retry',
-    ...adminOnly,
+    ...emailAdminOnly,
     idParam,
     validate,
     controller.retryEmailOutboxMessage
@@ -327,21 +333,21 @@ router.post(
 
 router.post(
     '/servicedesk/admin/freshdesk-import/dry-run',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     freshdeskImportPayloadValidation,
     validate,
     controller.dryRunFreshdeskImport
 );
 router.post(
     '/servicedesk/admin/freshdesk-import',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     freshdeskImportPayloadValidation,
     validate,
     controller.createFreshdeskImport
 );
 router.get(
     '/servicedesk/admin/freshdesk-import/runs',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit должен быть от 1 до 100.'),
     query('cursor').optional().isISO8601().withMessage('cursor должен быть ISO датой.'),
     validate,
@@ -349,7 +355,7 @@ router.get(
 );
 router.get(
     '/servicedesk/admin/freshdesk-import/runs/:id',
-    ...adminOnly,
+    ...freshdeskAdminOnly,
     idParam,
     validate,
     controller.getFreshdeskImportRun

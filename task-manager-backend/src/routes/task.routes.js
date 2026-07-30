@@ -22,8 +22,10 @@ const authMiddleware = require('../middlewares/auth.middleware.js');
 const roleMiddleware = require('../middlewares/role.middleware.js');
 const validate = require('../middlewares/validate.middleware.js');
 const sharedRuntimeValidate = require('../middlewares/shared-runtime-validate.middleware.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
 
 const router = express.Router();
+router.use(requireFeature('tickets'));
 
 // Validation rules
 const taskValidation = [
@@ -118,7 +120,7 @@ router.get('/', authMiddleware, getAll);
 // Get task details (all roles see own)
 router.get('/:id', authMiddleware, param('id').isString().withMessage('Invalid task ID'), validate, getById);
 router.get('/:id/timeline', authMiddleware, param('id').isString().withMessage('Invalid task ID'), validate, getTimeline);
-router.get('/:id/email-thread', authMiddleware, param('id').isString().withMessage('Invalid task ID'), validate, getEmailThread);
+router.get('/:id/email-thread', authMiddleware, requireFeature('email'), param('id').isString().withMessage('Invalid task ID'), validate, getEmailThread);
 
 router.post(
     '/:id/merge',
@@ -152,6 +154,7 @@ router.post(
 router.post(
     '/:id/email-reply',
     authMiddleware,
+    requireFeature('email'),
     param('id').isString().withMessage('Некорректный идентификатор заявки.'),
     emailReplyValidation,
     validate,
@@ -160,6 +163,7 @@ router.post(
 router.post(
     '/:id/reply-from-template',
     authMiddleware,
+    requireFeature('cannedReplies'),
     roleMiddleware(['ADMIN', 'AGENT']),
     param('id').isString().withMessage('Некорректный идентификатор заявки.'),
     replyFromTemplateValidation,
@@ -171,6 +175,7 @@ router.post(
 router.post(
     '/',
     authMiddleware,
+    requireFeature('ticketCreation'),
     roleMiddleware(['ADMIN', 'AGENT', 'REQUESTER']),
     taskValidation,
     validate,

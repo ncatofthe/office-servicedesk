@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middlewares/auth.middleware.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
 const { upload } = require('../middlewares/upload.middleware.js');
 const {
     uploadFile,
@@ -10,6 +11,8 @@ const {
     downloadTaskFile,
     downloadRawUpload
 } = require('../controllers/file.controller.js');
+
+router.use(requireFeature('tickets'), requireFeature('taskAttachments'));
 
 // Legacy generic upload is intentionally disabled to avoid orphaned files.
 router.post('/upload', authMiddleware, uploadFile);

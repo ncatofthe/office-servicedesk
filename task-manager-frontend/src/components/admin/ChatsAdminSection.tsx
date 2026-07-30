@@ -52,7 +52,6 @@ export const ChatsAdminSection: React.FC = () => {
     setNotice('');
     try {
       const updated = await chatsApi.updateSettings({
-        chatsEnabled: settings.chatsEnabled,
         directChatsEnabled: settings.directChatsEnabled,
         departmentChatsEnabled: settings.departmentChatsEnabled,
         ticketChatsEnabled: settings.ticketChatsEnabled,
@@ -155,6 +154,9 @@ export const ChatsAdminSection: React.FC = () => {
                 <h3 className="text-base font-semibold text-[#242424]">Доступность и файлы</h3>
               </div>
               <p className="mt-1 text-sm leading-6 text-[#777]">Изменения применяются ко всем пользователям портала.</p>
+              <p className="mt-1 text-xs leading-5 text-[#8a8a8a]">
+                Весь раздел включается и отключается во вкладке «Функции».
+              </p>
             </div>
             <button
               type="button"
@@ -169,7 +171,6 @@ export const ChatsAdminSection: React.FC = () => {
 
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {[
-              { key: 'chatsEnabled' as const, title: 'Раздел «Чаты»', hint: 'Главный переключатель мессенджера.' },
               { key: 'directChatsEnabled' as const, title: 'Личные и групповые', hint: 'Диалоги между сотрудниками.' },
               { key: 'departmentChatsEnabled' as const, title: 'Чаты отделов', hint: 'Состав берётся из настроек отделов.' },
               { key: 'ticketChatsEnabled' as const, title: 'Чаты заявок', hint: 'Переписка остаётся частью заявки.' },
@@ -181,7 +182,7 @@ export const ChatsAdminSection: React.FC = () => {
                   className="mt-1"
                   checked={settings[item.key]}
                   onChange={(event) => updateSetting(item.key, event.target.checked)}
-                  disabled={settingsSaving || (item.key !== 'chatsEnabled' && !settings.chatsEnabled)}
+                  disabled={settingsSaving || !settings.chatsEnabled}
                 />
                 <span>
                   <span className="block text-sm font-semibold text-[#303030]">{item.title}</span>

@@ -4,6 +4,9 @@ const router = express.Router();
 const authMiddleware = require('../middlewares/auth.middleware.js');
 const { getTaskComments, createComment, updateComment, deleteComment } = require('../controllers/comment.controller.js');
 const validate = require('../middlewares/validate.middleware.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
+
+router.use(requireFeature('tickets'));
 
 // Validation rules
 const commentValidation = [

@@ -4,6 +4,7 @@ import { Modal } from './ui/Modal';
 import { CannedReplyPicker } from './canned-replies/CannedReplyPicker';
 import { tasksApi, commentsApi, filesApi, knowledgeApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
+import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { getModuleVisibility } from '../access';
 import type {
   CommentVisibility,
@@ -432,6 +433,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   availableTasks = [],
 }) => {
   const { user } = useAuth();
+  const { isFeatureEnabled } = useProductSettings();
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [timeline, setTimeline] = useState<TaskTimelineEvent[]>([]);
@@ -573,7 +575,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setTimelineError(getApiErrorMessage(updatedTimelineResult.error, 'Не удалось загрузить историю заявки.'));
     }
 
-    if (updatedEmailThreadResult.ok) {
+    if (!isFeatureEnabled('email')) {
+      setEmailThread(null);
+      setEmailThreadError('');
+    } else if (updatedEmailThreadResult.ok) {
       setEmailThread(updatedEmailThreadResult.data);
       setEmailThreadError('');
     } else {
@@ -588,7 +593,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
       commentsApi.getByTask(id),
       tasksApi.getMergeInfo(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError })),
       tasksApi.getTimeline(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError })),
-      tasksApi.getEmailThread(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError })),
+      isFeatureEnabled('email')
+        ? tasksApi.getEmailThread(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError }))
+        : Promise.resolve({ ok: false as const, error: new Error('Email disabled') }),
     ]);
 
     return {
@@ -606,7 +613,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setLoading(true);
       setMergeInfoLoading(true);
       setTimelineLoading(true);
-      setEmailThreadLoading(true);
+      setEmailThreadLoading(isFeatureEnabled('email'));
       setError('');
       setSuccessMessage('');
       setMergeInfoError('');
@@ -631,7 +638,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       }
     };
     load();
-  }, [taskId, open]);
+  }, [taskId, open, isFeatureEnabled]);
 
   useEffect(() => {
     if (!open) {
@@ -641,7 +648,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   }, [open, taskId]);
 
   useEffect(() => {
-    if (!taskId || !open) {
+    if (!taskId || !open || !isFeatureEnabled('knowledge')) {
       setKnowledgeSearch('');
       setKnowledgeArticles([]);
       setKnowledgeError('');
@@ -666,7 +673,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [knowledgeSearch, open, taskId]);
+  }, [isFeatureEnabled, knowledgeSearch, open, taskId]);
 
   useEffect(() => {
     if (!task) {
@@ -1190,7 +1197,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     </div>
                   )}
 
-                  {!isRequesterView && <div className="order-4 rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3">
+                  {!isRequesterView && isFeatureEnabled('knowledge') && <div className="order-4 rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <BookOpen size={16} className="text-[#5f5f5f]" />
                       <p className="text-sm font-semibold text-[#1f1f1f]">База знаний</p>
@@ -1244,7 +1251,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     )}
                   </div>}
 
-                  {canUseCannedReplies && taskId && (
+                  {canUseCannedReplies && isFeatureEnabled('cannedReplies') && taskId && (
                     <CannedReplyPicker
                       taskId={taskId}
                       disabled={loading || commentSaving || taskSaving || taskDeleting}
@@ -1252,7 +1259,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     />
                   )}
 
-                  {!isRequesterView && <div className="rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3" data-testid="task-email-thread">
+                  {!isRequesterView && isFeatureEnabled('email') && <div className="rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3" data-testid="task-email-thread">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1646,7 +1653,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     )}
                   </div>}
 
-                  <div className="space-y-2">
+                  {isFeatureEnabled('taskAttachments') && <div className="space-y-2">
                     <div>
                       <p className="text-sm font-semibold text-[#1f1f1f]">{isRequesterView ? 'Файлы и скриншоты' : 'Файлы'}</p>
                       {isRequesterView && <p className="mt-1 text-xs text-[#8a8a8a]">Добавьте изображение ошибки или документ, если это поможет разобраться.</p>}
@@ -1690,7 +1697,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                         <p className="text-sm text-[#8a8a8a]">Файлы не прикреплены</p>
                       )}
                     </div>
-                  </div>
+                  </div>}
                 </div>
               </div>
             </div>

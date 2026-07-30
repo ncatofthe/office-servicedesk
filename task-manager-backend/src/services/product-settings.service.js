@@ -1,6 +1,34 @@
 const prisma = require('../prisma/prisma.js');
 
 const PRODUCT_SETTINGS_ID = 'default';
+const FEATURE_COLUMN_MAP = {
+    dashboard: 'dashboardEnabled',
+    tickets: 'ticketsEnabled',
+    ticketCreation: 'ticketCreationEnabled',
+    queue: 'queueEnabled',
+    knowledge: 'knowledgeEnabled',
+    cannedReplies: 'cannedRepliesEnabled',
+    chats: 'chatsEnabled',
+    team: 'teamEnabled',
+    reports: 'reportsEnabled',
+    notifications: 'notificationsEnabled',
+    automation: 'automationEnabled',
+    email: 'emailEnabled',
+    taskAttachments: 'taskAttachmentsEnabled',
+    freshdeskImport: 'freshdeskImportEnabled'
+};
+const FEATURE_KEYS = Object.keys(FEATURE_COLUMN_MAP);
+const FEATURE_DEPENDENCIES = {
+    ticketCreation: ['tickets'],
+    queue: ['tickets'],
+    cannedReplies: ['tickets'],
+    reports: ['tickets'],
+    notifications: ['tickets'],
+    automation: ['tickets'],
+    email: ['tickets'],
+    taskAttachments: ['tickets'],
+    freshdeskImport: ['tickets']
+};
 const PRODUCT_SETTINGS_DEFAULTS = {
     portalName: 'Office ServiceDesk',
     companyName: '',
@@ -8,7 +36,11 @@ const PRODUCT_SETTINGS_DEFAULTS = {
     locale: 'ru-RU',
     timezone: 'Europe/Moscow',
     defaultPriority: 'MEDIUM',
-    defaultFolderId: null
+    defaultFolderId: null,
+    ...Object.values(FEATURE_COLUMN_MAP).reduce((defaults, column) => ({
+        ...defaults,
+        [column]: true
+    }), {})
 };
 const PRODUCT_SETTINGS_SELECT = {
     id: true,
@@ -19,6 +51,10 @@ const PRODUCT_SETTINGS_SELECT = {
     timezone: true,
     defaultPriority: true,
     defaultFolderId: true,
+    ...Object.values(FEATURE_COLUMN_MAP).reduce((select, column) => ({
+        ...select,
+        [column]: true
+    }), {}),
     defaultFolder: {
         select: {
             id: true,
@@ -36,7 +72,8 @@ const UPDATE_FIELDS = [
     'locale',
     'timezone',
     'defaultPriority',
-    'defaultFolderId'
+    'defaultFolderId',
+    'features'
 ];
 const PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 
@@ -85,6 +122,25 @@ const assertPayloadFields = (payload) => {
     if (unsupported.length > 0) {
         throw createSettingsError(`Неподдерживаемые поля настроек: ${unsupported.join(', ')}.`);
     }
+};
+
+const normalizeFeatures = (features) => {
+    if (!features || typeof features !== 'object' || Array.isArray(features)) {
+        throw createSettingsError('features должен быть объектом.');
+    }
+
+    const unsupported = Object.keys(features).filter((feature) => !FEATURE_KEYS.includes(feature));
+    if (unsupported.length > 0) {
+        throw createSettingsError(`Неподдерживаемые функции: ${unsupported.join(', ')}.`);
+    }
+
+    return Object.entries(features).reduce((data, [feature, enabled]) => {
+        if (typeof enabled !== 'boolean') {
+            throw createSettingsError(`features.${feature} должен быть boolean.`);
+        }
+        data[FEATURE_COLUMN_MAP[feature]] = enabled;
+        return data;
+    }, {});
 };
 
 const getProductSettings = async(db = prisma) => {
@@ -158,23 +214,58 @@ const updateProductSettings = async(payload, db = prisma) => {
             data.defaultFolderId = folder.id;
         }
     }
+    if (Object.prototype.hasOwnProperty.call(payload, 'features')) {
+        Object.assign(data, normalizeFeatures(payload.features));
+    }
 
     if (Object.keys(data).length === 0) {
         throw createSettingsError('Нет данных для обновления настроек продукта.');
     }
 
-    await getProductSettings(db);
-    return db.productSettings.update({
-        where: { id: PRODUCT_SETTINGS_ID },
-        data,
-        select: PRODUCT_SETTINGS_SELECT
-    });
+    const performUpdate = async(targetDb) => {
+        await getProductSettings(targetDb);
+        const settings = await targetDb.productSettings.update({
+            where: { id: PRODUCT_SETTINGS_ID },
+            data,
+            select: PRODUCT_SETTINGS_SELECT
+        });
+
+        if (Object.prototype.hasOwnProperty.call(data, 'chatsEnabled')) {
+            await targetDb.chatSettings.upsert({
+                where: { id: 'default' },
+                create: { id: 'default', chatsEnabled: data.chatsEnabled },
+                update: { chatsEnabled: data.chatsEnabled }
+            });
+        }
+
+        return settings;
+    };
+
+    if (db === prisma) {
+        return prisma.$transaction(performUpdate);
+    }
+    return performUpdate(db);
+};
+
+const isFeatureEnabled = async(feature, db = prisma) => {
+    const column = FEATURE_COLUMN_MAP[feature];
+    if (!column) {
+        throw createSettingsError(`Неизвестная функция: ${feature}.`);
+    }
+    const settings = await getProductSettings(db);
+    if (settings[column] === false) return false;
+    return (FEATURE_DEPENDENCIES[feature] || []).every((dependency) => (
+        settings[FEATURE_COLUMN_MAP[dependency]] !== false
+    ));
 };
 
 module.exports = {
+    FEATURE_COLUMN_MAP,
+    FEATURE_KEYS,
     PRODUCT_SETTINGS_ID,
     PRODUCT_SETTINGS_DEFAULTS,
     PRODUCT_SETTINGS_SELECT,
     getProductSettings,
+    isFeatureEnabled,
     updateProductSettings
 };

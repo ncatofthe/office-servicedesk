@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma.js');
+const productSettingsService = require('./product-settings.service.js');
 const { createServiceDeskError } = require('./servicedesk.service.js');
 const { safeRecordTimelineEvent } = require('./timeline.service.js');
 const { resolveTaskServiceDeskReferences } = require('../utils/task-servicedesk-refs.js');
@@ -939,6 +940,10 @@ const executeRule = async(rule, taskState, executionContext = {}, { dryRun = fal
 };
 
 const runAutomationRulesForTask = async({ taskId, triggerType, channel, requesterEmail } = {}, db = prisma) => {
+    if (!(await productSettingsService.isFeatureEnabled('automation', db))) {
+        return [];
+    }
+
     if (!taskId) {
         throw createServiceDeskError('taskId обязателен для automation execution.', 'SERVICEDESK_INVALID');
     }

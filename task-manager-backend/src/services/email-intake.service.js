@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt');
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const prisma = require('../prisma/prisma.js');
+const productSettingsService = require('./product-settings.service.js');
 const taskService = require('./task.service.js');
 const { uploadsDir } = require('../middlewares/upload.middleware.js');
 const { buildStoredAttachmentPath } = require('../utils/attachment.utils.js');
@@ -386,6 +387,10 @@ const parseAndProcessRawMessage = async(rawMessage, context = {}) => {
 };
 
 const syncEmailInbox = async(options = {}) => {
+    if (!(await productSettingsService.isFeatureEnabled('email'))) {
+        return { mailbox: null, processed: [], skipped: [], failed: [], totalScanned: 0, featureDisabled: true };
+    }
+
     const config = {
         ...getEmailIntakeConfig(),
         ...options

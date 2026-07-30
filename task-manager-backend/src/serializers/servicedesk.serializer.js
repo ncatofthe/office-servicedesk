@@ -51,7 +51,23 @@ const serializeProductSettings = (settings, options = {}) => {
                 id: settings.defaultFolder.id,
                 name: settings.defaultFolder.name
             }
-            : null
+            : null,
+        features: {
+            dashboard: settings.dashboardEnabled !== false,
+            tickets: settings.ticketsEnabled !== false,
+            ticketCreation: settings.ticketCreationEnabled !== false,
+            queue: settings.queueEnabled !== false,
+            knowledge: settings.knowledgeEnabled !== false,
+            cannedReplies: settings.cannedRepliesEnabled !== false,
+            chats: settings.chatsEnabled !== false,
+            team: settings.teamEnabled !== false,
+            reports: settings.reportsEnabled !== false,
+            notifications: settings.notificationsEnabled !== false,
+            automation: settings.automationEnabled !== false,
+            email: settings.emailEnabled !== false,
+            taskAttachments: settings.taskAttachmentsEnabled !== false,
+            freshdeskImport: settings.freshdeskImportEnabled !== false
+        }
     };
 
     if (options.admin) {

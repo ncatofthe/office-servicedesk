@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const prisma = require('../prisma/prisma.js');
+const productSettingsService = require('./product-settings.service.js');
 const { markTaskFirstResponse } = require('./sla.service.js');
 const { safeRecordTimelineEvent } = require('./timeline.service.js');
 const { isAdminRole, isAgentRole } = require('../utils/roles.js');
@@ -567,6 +568,10 @@ const createTaskCommentAndFirstResponse = async(db, taskId, actor, message) => {
 };
 
 const sendTaskEmailReply = async(taskId, message, actor, options = {}) => {
+    if (!(await productSettingsService.isFeatureEnabled('email', options.db || prisma))) {
+        throw new Error('Работа с почтой отключена администратором.');
+    }
+
     const normalizedMessage = String(message || '').trim();
     if (!normalizedMessage) {
         throw new Error('Текст email-ответа обязателен.');
@@ -1036,6 +1041,9 @@ const retryOutboundMessageById = async(outboxId, options = {}) => {
 
 const retryPendingOutboundMessages = async(options = {}) => {
     const db = options.db || prisma;
+    if (!(await productSettingsService.isFeatureEnabled('email', db))) {
+        return { scanned: 0, processed: 0, skipped: true, reason: 'FEATURE_DISABLED' };
+    }
     const config = {
         ...getEmailOutboundConfig(),
         ...(options.config || {})

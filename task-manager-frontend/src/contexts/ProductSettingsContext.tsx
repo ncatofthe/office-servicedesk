@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { productSettingsApi } from '../api';
-import type { ProductSettings } from '../types';
+import type { ProductFeatureKey, ProductSettings } from '../types';
+import { isFeatureEnabled } from '../access';
 import { setRuntimeLocale } from '../utils/runtime-locale';
 
 interface ProductSettingsContextValue {
@@ -9,6 +10,7 @@ interface ProductSettingsContextValue {
   isAvailable: boolean;
   refreshSettings: () => Promise<void>;
   applySettings: (settings: ProductSettings) => void;
+  isFeatureEnabled: (feature: ProductFeatureKey) => boolean;
 }
 
 const ProductSettingsContext = createContext<ProductSettingsContextValue | undefined>(undefined);
@@ -43,6 +45,13 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
   useEffect(() => {
     void refreshSettings();
+    const interval = window.setInterval(() => void refreshSettings(), 60000);
+    const handleFocus = () => void refreshSettings();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [refreshSettings]);
 
   const value = useMemo(() => ({
@@ -51,6 +60,7 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     isAvailable,
     refreshSettings,
     applySettings,
+    isFeatureEnabled: (feature: ProductFeatureKey) => isFeatureEnabled(settings, feature),
   }), [applySettings, isAvailable, isLoading, refreshSettings, settings]);
 
   return (

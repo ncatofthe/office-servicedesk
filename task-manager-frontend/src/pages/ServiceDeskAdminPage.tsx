@@ -13,6 +13,7 @@ import { EmailOutboxAdminSection } from '../components/admin/EmailOutboxAdminSec
 import { FreshdeskImportAdminSection } from '../components/admin/FreshdeskImportAdminSection';
 import { ProductSettingsAdminSection } from '../components/admin/ProductSettingsAdminSection';
 import { ChatsAdminSection } from '../components/admin/ChatsAdminSection';
+import { FeatureSettingsAdminSection } from '../components/admin/FeatureSettingsAdminSection';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
@@ -31,7 +32,7 @@ import type {
 } from '../types';
 
 type DirectoryKey = 'folders' | 'types' | 'subtypes' | 'entities' | 'teams';
-type AdminSectionKey = DirectoryKey | 'productSettings' | 'automation' | 'emailOutbox' | 'freshdeskImport' | 'chats';
+type AdminSectionKey = DirectoryKey | 'features' | 'productSettings' | 'automation' | 'emailOutbox' | 'freshdeskImport' | 'chats';
 type DirectoryItem = ServiceDeskFolder | ServiceDeskTicketType | ServiceDeskTicketSubtype | ServiceDeskEntity | ServiceDeskTeam;
 
 const directoryCopy: Record<DirectoryKey, { tab: string; createTitle: string; editTitle: string; hint: string }> = {
@@ -201,7 +202,7 @@ export const ServiceDeskAdminPage: React.FC = () => {
     },
   ], []);
 
-  const [activeKey, setActiveKey] = useState<AdminSectionKey>('productSettings');
+  const [activeKey, setActiveKey] = useState<AdminSectionKey>('features');
   const [itemsByKey, setItemsByKey] = useState<Record<DirectoryKey, DirectoryItem[]>>({
     folders: [],
     types: [],
@@ -229,11 +230,12 @@ export const ServiceDeskAdminPage: React.FC = () => {
   const [memberIsLead, setMemberIsLead] = useState(false);
   const [memberSaving, setMemberSaving] = useState(false);
   const isProductSettingsTab = activeKey === 'productSettings';
+  const isFeaturesTab = activeKey === 'features';
   const isAutomationTab = activeKey === 'automation';
   const isEmailOutboxTab = activeKey === 'emailOutbox';
   const isFreshdeskImportTab = activeKey === 'freshdeskImport';
   const isChatsTab = activeKey === 'chats';
-  const isSpecialTab = isProductSettingsTab || isAutomationTab || isEmailOutboxTab || isFreshdeskImportTab || isChatsTab;
+  const isSpecialTab = isFeaturesTab || isProductSettingsTab || isAutomationTab || isEmailOutboxTab || isFreshdeskImportTab || isChatsTab;
   const activeDirectoryKey: DirectoryKey = isSpecialTab ? 'folders' : activeKey;
   const activeConfig = configs.find((config) => config.key === activeDirectoryKey) || configs[0];
   const activeItems = isSpecialTab ? [] : itemsByKey[activeDirectoryKey];
@@ -243,6 +245,7 @@ export const ServiceDeskAdminPage: React.FC = () => {
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) || null;
   const tabs = useMemo(
     () => [
+      { key: 'features', label: 'Функции' },
       { key: 'productSettings', label: 'Компания и портал' },
       { key: 'chats', label: 'Чаты' },
       ...configs.map((config) => ({ key: config.key, label: config.title })),
@@ -590,7 +593,9 @@ export const ServiceDeskAdminPage: React.FC = () => {
         </div>
       )}
 
-      {isProductSettingsTab ? (
+      {isFeaturesTab ? (
+        <FeatureSettingsAdminSection />
+      ) : isProductSettingsTab ? (
         <ProductSettingsAdminSection />
       ) : isChatsTab ? (
         <ChatsAdminSection />

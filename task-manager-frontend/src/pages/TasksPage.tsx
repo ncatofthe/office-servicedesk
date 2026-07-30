@@ -148,7 +148,7 @@ const sortTasks = (tasks: TaskSummary[], sortBy: SortKey) => {
 
 export const TasksPage: React.FC = () => {
   const { user } = useAuth();
-  const { settings } = useProductSettings();
+  const { settings, isFeatureEnabled } = useProductSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     tasks,
@@ -162,7 +162,7 @@ export const TasksPage: React.FC = () => {
     createTask,
     moveTask,
   } = useAppStore();
-  const canCreateTicket = canCreateTasks(user?.role);
+  const canCreateTicket = canCreateTasks(user?.role) && isFeatureEnabled('ticketCreation');
   const canReadUsers = hasCapability(user, 'users:read');
   const canUseAssigneeScope = user?.role === 'ADMIN' || user?.role === 'AGENT';
   const isRequester = user?.role === 'REQUESTER';
@@ -1155,7 +1155,7 @@ export const TasksPage: React.FC = () => {
             </button>
           )}
 
-          <div
+          {isFeatureEnabled('taskAttachments') && <div
             className="rounded-[10px] border border-dashed border-[#d8d8d8] bg-[#f8f8f8] p-4 text-center text-sm text-[#5f5f5f]"
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
@@ -1189,7 +1189,7 @@ export const TasksPage: React.FC = () => {
                 </ul>
               </div>
             )}
-          </div>
+          </div>}
 
           {formError && <p className="text-sm text-[#b23b3b]">{formError}</p>}
 

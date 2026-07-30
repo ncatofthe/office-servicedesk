@@ -16,7 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { chatsApi, notificationsApi } from '../api';
 import type { Notification } from '../types';
-import { APP_NAV_ITEMS, canAccessModule, canCreateTasks } from '../access';
+import { APP_NAV_ITEMS, canAccessModule, canCreateTasks, isModuleFeatureEnabled } from '../access';
 import { formatDateTime, getInitials } from '../utils';
 import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
 
@@ -132,12 +132,12 @@ const isEndpointUnavailable = (error: unknown) => {
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuth();
-  const { settings } = useProductSettings();
+  const { settings, isFeatureEnabled } = useProductSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const isRequester = user?.role === 'REQUESTER';
   const visibleNavItems = APP_NAV_ITEMS
-    .filter((item) => canAccessModule(user?.role, item.moduleKey))
+    .filter((item) => canAccessModule(user?.role, item.moduleKey) && isModuleFeatureEnabled(settings, item.moduleKey))
     .map((item) => ({
       ...item,
       label: isRequester && item.path === '/tickets'
@@ -236,15 +236,28 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, [user?.id]);
 
   useEffect(() => {
+    if (!isFeatureEnabled('notifications')) {
+      setUnreadCount(0);
+      setNotifications([]);
+      setNotificationsOpen(false);
+      setNotificationsDrawerOpen(false);
+      return;
+    }
+
     void syncUnreadCount();
     const timer = window.setInterval(() => {
       void syncUnreadCount();
     }, 60000);
 
     return () => window.clearInterval(timer);
-  }, [syncUnreadCount]);
+  }, [isFeatureEnabled, syncUnreadCount]);
 
   useEffect(() => {
+    if (!isFeatureEnabled('chats')) {
+      setChatUnreadCount(0);
+      return;
+    }
+
     const syncChatUnreadCount = async () => {
       try {
         setChatUnreadCount(await chatsApi.getUnreadCount());
@@ -259,7 +272,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     }, 30000);
 
     return () => window.clearInterval(timer);
-  }, [location.pathname]);
+  }, [isFeatureEnabled, location.pathname]);
 
   useEffect(() => {
     const handleProfileExtrasUpdated = (event: Event) => {
@@ -439,7 +452,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </nav>
 
             <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5">
-              {canCreateTasks(user?.role) && (
+              {canCreateTasks(user?.role) && isFeatureEnabled('ticketCreation') && (
                 <>
                   <Link
                     to="/tickets?create=1"
@@ -459,7 +472,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </>
               )}
 
-              <div className="relative" ref={notificationsRef}>
+              {isFeatureEnabled('notifications') && <div className="relative" ref={notificationsRef}>
                 <button
                   type="button"
                   className="relative flex h-9 w-9 items-center justify-center rounded-[9px] text-[#4f4f4f] transition-colors hover:bg-[#f1f1ef] hover:text-[#222]"
@@ -538,7 +551,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     </button>
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="relative" ref={profileMenuRef}>
                 <button
@@ -604,7 +617,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </header>
 
-      {notificationsDrawerOpen && (
+      {isFeatureEnabled('notifications') && notificationsDrawerOpen && (
         <div
           className="fixed inset-0 z-40 bg-[rgba(15,15,15,0.32)] sm:px-4 sm:py-4"
           data-notification-drawer-overlay="true"

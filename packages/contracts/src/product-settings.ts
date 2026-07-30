@@ -5,6 +5,24 @@ export interface ProductSettingsFolderDto {
   name: string;
 }
 
+export type ProductFeatureKey =
+  | 'dashboard'
+  | 'tickets'
+  | 'ticketCreation'
+  | 'queue'
+  | 'knowledge'
+  | 'cannedReplies'
+  | 'chats'
+  | 'team'
+  | 'reports'
+  | 'notifications'
+  | 'automation'
+  | 'email'
+  | 'taskAttachments'
+  | 'freshdeskImport';
+
+export type ProductFeaturesDto = Record<ProductFeatureKey, boolean>;
+
 export interface ProductSettingsDto {
   portalName: string;
   companyName: string;
@@ -14,6 +32,7 @@ export interface ProductSettingsDto {
   defaultPriority: TaskPriority;
   defaultFolderId: string | null;
   defaultFolder: ProductSettingsFolderDto | null;
+  features: ProductFeaturesDto;
 }
 
 export interface ProductSettingsAdminDto extends ProductSettingsDto {
@@ -30,4 +49,5 @@ export interface UpdateProductSettingsRequest {
   timezone?: string;
   defaultPriority?: TaskPriority;
   defaultFolderId?: string | null;
+  features?: Partial<ProductFeaturesDto>;
 }

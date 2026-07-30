@@ -1,4 +1,4 @@
-import type { CapabilityAwareUser, UserCapability, UserRole } from './types';
+import type { CapabilityAwareUser, ProductFeatureKey, ProductSettings, UserCapability, UserRole } from './types';
 
 export type AppModuleKey =
   | 'dashboard'
@@ -78,6 +78,46 @@ export const APP_NAV_ITEMS: Array<{ path: string; label: string; moduleKey: Excl
   { path: '/team', label: 'Пользователи', moduleKey: 'team' },
 ];
 
+export const MODULE_FEATURE_MAP: Record<Exclude<AppModuleKey, 'admin'>, ProductFeatureKey> = {
+  dashboard: 'dashboard',
+  create: 'ticketCreation',
+  tasks: 'tickets',
+  kanban: 'queue',
+  knowledge: 'knowledge',
+  cannedReplies: 'cannedReplies',
+  team: 'team',
+  reports: 'reports',
+  chats: 'chats',
+};
+
+const FEATURE_DEPENDENCIES: Partial<Record<ProductFeatureKey, ProductFeatureKey[]>> = {
+  ticketCreation: ['tickets'],
+  queue: ['tickets'],
+  cannedReplies: ['tickets'],
+  reports: ['tickets'],
+  notifications: ['tickets'],
+  automation: ['tickets'],
+  email: ['tickets'],
+  taskAttachments: ['tickets'],
+  freshdeskImport: ['tickets'],
+};
+
+export const isFeatureEnabled = (
+  settings: ProductSettings | null | undefined,
+  feature: ProductFeatureKey
+): boolean => {
+  const configured = settings?.features?.[feature];
+  if (configured === false) return false;
+  return (FEATURE_DEPENDENCIES[feature] || []).every((dependency) => (
+    isFeatureEnabled(settings, dependency)
+  ));
+};
+
+export const isModuleFeatureEnabled = (
+  settings: ProductSettings | null | undefined,
+  moduleKey: AppModuleKey
+): boolean => moduleKey === 'admin' || isFeatureEnabled(settings, MODULE_FEATURE_MAP[moduleKey]);
+
 export const ROLE_CAPABILITY_MATRIX: Record<UserRole, UserCapability[]> = {
   ADMIN: [
     'tickets:read',
@@ -117,6 +157,13 @@ export const canAccessModule = (role: UserRole | undefined, moduleKey: AppModule
 
 export const canCreateTasks = (role: UserRole | undefined): boolean =>
   hasCapability({ role }, 'tickets:create');
+
+export const getDefaultAppPath = (
+  role: UserRole | undefined,
+  settings: ProductSettings | null | undefined
+): string => APP_NAV_ITEMS.find((item) => (
+  canAccessModule(role, item.moduleKey) && isModuleFeatureEnabled(settings, item.moduleKey)
+))?.path || (canAccessModule(role, 'admin') ? '/admin' : '/profile');
 
 export const getUserCapabilities = (user: CapabilityAwareUser | null | undefined): UserCapability[] => {
   const roleCapabilities = ROLE_CAPABILITY_MATRIX[resolveRole(user?.role)];

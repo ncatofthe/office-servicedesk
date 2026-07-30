@@ -4,8 +4,10 @@ const authMiddleware = require('../middlewares/auth.middleware.js');
 const roleMiddleware = require('../middlewares/role.middleware.js');
 const validate = require('../middlewares/validate.middleware.js');
 const controller = require('../controllers/canned-reply.controller.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
 
 const router = express.Router();
+router.use(requireFeature('tickets'), requireFeature('cannedReplies'));
 
 const managerOnly = [authMiddleware, roleMiddleware(['ADMIN', 'AGENT'])];
 

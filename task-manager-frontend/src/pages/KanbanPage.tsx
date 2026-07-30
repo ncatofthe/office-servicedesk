@@ -5,6 +5,7 @@ import { TaskCard } from '../components/ui/TaskCard';
 import type { TaskStatus, TaskPriority } from '../types';
 import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
+import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { canCreateTasks, getModuleVisibility } from '../access';
 import { filesApi, serviceDeskFoldersApi } from '../api';
 import { TaskDetailsModal } from '../components/TaskDetailsModal';
@@ -20,6 +21,7 @@ const toFolderOptions = (folders: ServiceDeskFolder[]): TaskDepartmentOption[] =
 
 export const KanbanPage: React.FC = () => {
   const { user } = useAuth();
+  const { isFeatureEnabled } = useProductSettings();
   const {
     tasks,
     fetchTasks,
@@ -32,7 +34,7 @@ export const KanbanPage: React.FC = () => {
     tasksError,
     usersError,
   } = useAppStore();
-  const canCreateTask = canCreateTasks(user?.role);
+  const canCreateTask = canCreateTasks(user?.role) && isFeatureEnabled('ticketCreation');
   const [availableFolders, setAvailableFolders] = useState<ServiceDeskFolder[]>([]);
   const departmentOptions = toFolderOptions(availableFolders);
   const defaultFolderId = departmentOptions[0]?.id || '';
@@ -188,7 +190,7 @@ export const KanbanPage: React.FC = () => {
                 {columnCounts[col.id] || 0}
               </span>
             </div>
-          <div
+          {isFeatureEnabled('taskAttachments') && <div
             className="min-h-[340px] space-y-3 rounded-[18px] border border-dashed border-white/90 bg-[rgba(255,255,255,0.7)] p-3 md:min-h-[520px]"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
@@ -219,7 +221,7 @@ export const KanbanPage: React.FC = () => {
                 </p>
               </div>
             )}
-          </div>
+          </div>}
         </section>
       )})}
         </div>

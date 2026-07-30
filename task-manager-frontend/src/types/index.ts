@@ -19,6 +19,8 @@ import type {
   LoginResponseDto,
   ProductSettingsAdminDto,
   ProductSettingsDto,
+  ProductFeatureKey as SharedProductFeatureKey,
+  ProductFeaturesDto,
   RegisterRequestDto,
   RegisterResponseDto,
   ReviewListItemDto,
@@ -75,6 +77,8 @@ export type EmailOutboxStatus = 'DRY_RUN' | 'SENT' | 'FAILED' | 'RETRY_PENDING';
 export type ProductSettings = ProductSettingsDto;
 export type ProductSettingsAdmin = ProductSettingsAdminDto;
 export type UpdateProductSettingsInput = UpdateProductSettingsRequest;
+export type ProductFeatureKey = SharedProductFeatureKey;
+export type ProductFeatures = ProductFeaturesDto;
 
 // Legacy app-wide user model.
 // Keep this wider shape for older UI flows and derived fields that are not
