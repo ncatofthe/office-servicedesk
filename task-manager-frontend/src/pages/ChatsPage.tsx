@@ -145,6 +145,19 @@ const sameDay = (left?: string, right?: string) => {
   return new Date(left).toDateString() === new Date(right).toDateString();
 };
 
+const formatConversationTime = (value: string) => {
+  const date = new Date(value);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' }).format(date);
+  }
+  return new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    ...(date.getFullYear() === now.getFullYear() ? {} : { year: '2-digit' }),
+  }).format(date);
+};
+
 export const ChatsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -510,20 +523,7 @@ export const ChatsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4" data-testid="chats-page">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="page-title">Сообщения</h1>
-          <p className="page-subtitle mt-1">Сотрудники, отделы и заявки — в одной рабочей ленте.</p>
-        </div>
-        {settings.directChatsEnabled && (
-          <button type="button" className="btn btn-primary inline-flex items-center gap-2" onClick={() => setNewChatOpen(true)}>
-            <Plus size={16} />
-            Новый диалог
-          </button>
-        )}
-      </div>
-
+    <div className="space-y-3" data-testid="chats-page">
       {error && (
         <div className="flex items-start justify-between gap-3 rounded-[12px] border border-[#f3c4c4] bg-[#fff4f4] px-4 py-3 text-sm text-[#9f3333]">
           <span>{error}</span>
@@ -531,20 +531,37 @@ export const ChatsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="card h-[calc(100dvh-270px)] min-h-[560px] overflow-hidden p-0 md:h-[720px]">
-        <div className="grid h-full min-h-0 md:grid-cols-[330px,minmax(0,1fr)]">
-          <aside className={`${selection ? 'hidden md:flex' : 'flex'} min-h-0 flex-col border-r border-[#e3e3e3] bg-white`}>
-            <div className="border-b border-[#e8e8e8] p-3">
+      <div className="h-[calc(100dvh-118px)] min-h-[590px] overflow-hidden rounded-[18px] border border-[#dededb] bg-white shadow-[0_18px_50px_rgba(27,31,36,0.08)] md:h-[calc(100dvh-90px)]">
+        <div className="grid h-full min-h-0 md:grid-cols-[350px,minmax(0,1fr)]">
+          <aside className={`${selection ? 'hidden md:flex' : 'flex'} min-h-0 flex-col border-r border-[#e5e5e2] bg-[#fbfbfa]`}>
+            <div className="border-b border-[#e8e8e5] bg-white px-3 pb-3 pt-3.5">
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="min-w-0">
+                  <h1 className="text-[19px] font-semibold tracking-[-0.02em] text-[#222]">Чаты</h1>
+                  <p className="mt-0.5 truncate text-[11px] text-[#92928d]">Люди, отделы и заявки</p>
+                </div>
+                {settings.directChatsEnabled && (
+                  <button
+                    type="button"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] text-white shadow-[0_6px_16px_rgba(45,60,84,0.2)] transition hover:bg-[#223046]"
+                    onClick={() => setNewChatOpen(true)}
+                    aria-label="Новый диалог"
+                    title="Новый диалог"
+                  >
+                    <Plus size={17} />
+                  </button>
+                )}
+              </div>
               <div className="relative">
-                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#969696]" />
+                <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9a9a95]" />
                 <input
-                  className="input h-11 pl-9"
+                  className="mt-3 h-10 w-full rounded-[11px] border border-[#e3e3e0] bg-[#f6f6f4] pl-9 pr-3 text-[13px] text-[#292929] outline-none transition placeholder:text-[#a1a19c] focus:border-[#b8bec7] focus:bg-white focus:ring-4 focus:ring-[#2d3c54]/5"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Поиск переписок"
+                  placeholder="Поиск"
                 />
               </div>
-              <div className="mt-2 flex gap-1 overflow-x-auto">
+              <div className="mt-2.5 flex gap-1 overflow-x-auto">
                 {FILTERS.filter((item) => (
                   item.key === 'all'
                   || (item.key === 'direct' && settings.directChatsEnabled)
@@ -558,8 +575,8 @@ export const ChatsPage: React.FC = () => {
                       setFilter(item.key);
                       setSelection(null);
                     }}
-                    className={`h-8 shrink-0 rounded-[8px] px-2.5 text-xs font-medium transition ${
-                      filter === item.key ? 'bg-[#2f2f2f] text-white' : 'text-[#686868] hover:bg-[#f0f0ee]'
+                    className={`h-7 shrink-0 rounded-full px-2.5 text-[11px] font-medium transition ${
+                      filter === item.key ? 'bg-[#2d3c54] text-white' : 'text-[#74746f] hover:bg-[#efefec] hover:text-[#333]'
                     }`}
                   >
                     {item.label}
@@ -568,13 +585,13 @@ export const ChatsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
               {loading ? (
                 <DataState variant="loading" message="Загружаем диалоги..." />
               ) : conversationItems.length === 0 ? (
                 <DataState variant="empty" message="Переписок пока нет. Создайте диалог или откройте чат заявки." />
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {conversationItems.map((item) => {
                     const active = selection?.type === item.type && selection.id === item.id;
                     const Icon = getConversationIcon(item);
@@ -591,17 +608,17 @@ export const ChatsPage: React.FC = () => {
                         key={`${item.type}:${item.id}`}
                         type="button"
                         onClick={() => setSelection({ type: item.type, id: item.id })}
-                        className={`w-full rounded-[13px] p-3 text-left transition ${
-                          active ? 'bg-[#ecece9]' : 'hover:bg-[#f5f5f3]'
+                        className={`w-full rounded-[13px] px-2.5 py-2.5 text-left transition ${
+                          active ? 'bg-[#e9edf2] shadow-[inset_0_0_0_1px_rgba(45,60,84,0.05)]' : 'hover:bg-[#f1f1ef]'
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] ${
+                          <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
                             isTicket
-                              ? 'bg-[#f3eadc] text-[#675a45]'
+                              ? 'bg-[#f3e9da] text-[#6e5a3c]'
                               : item.chat.kind === 'DEPARTMENT'
-                                ? 'bg-[#e6edef] text-[#475d65]'
-                                : 'bg-[#2f2f2f] text-white'
+                                ? 'bg-[#e1eceb] text-[#41615f]'
+                                : 'bg-[#2d3c54] text-white'
                           }`}>
                             {!isTicket && item.chat.kind === 'DIRECT'
                               ? getInitials(getDirectPeer(item.chat, user?.id)?.name || title)
@@ -609,14 +626,17 @@ export const ChatsPage: React.FC = () => {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <p className="truncate text-sm font-semibold text-[#242424]">{title}</p>
+                              <p className="truncate text-[13px] font-semibold text-[#252525]">{title}</p>
+                              <span className="ml-auto shrink-0 text-[10px] font-medium text-[#a0a09b]">{formatConversationTime(item.timestamp)}</span>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              <p className={`min-w-0 flex-1 truncate text-[11px] ${unread > 0 ? 'font-medium text-[#4e5765]' : 'text-[#858580]'}`}>{preview}</p>
                               {unread > 0 && (
-                                <span className="ml-auto flex min-h-5 min-w-5 items-center justify-center rounded-full bg-[#2f2f2f] px-1.5 text-[10px] text-white">
+                                <span className="flex min-h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] px-1 text-[9px] text-white">
                                   {unread > 99 ? '99+' : unread}
                                 </span>
                               )}
                             </div>
-                            <p className="mt-0.5 truncate text-xs text-[#818181]">{preview}</p>
                           </div>
                         </div>
                       </button>
@@ -627,33 +647,39 @@ export const ChatsPage: React.FC = () => {
             </div>
           </aside>
 
-          <section className={`${selection ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col bg-[#f7f7f5]`}>
+          <section className={`${selection ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-col bg-[#f3f5f7]`}>
             {!selection ? (
               <div className="flex flex-1 items-center justify-center p-8">
                 <div className="max-w-sm text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-[18px] bg-white text-[#454545] shadow-sm">
-                    <MessageCircle size={27} />
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#e6eaf0] text-[#2d3c54]">
+                    <MessageCircle size={26} strokeWidth={1.7} />
                   </div>
-                  <h2 className="mt-4 text-lg font-semibold text-[#252525]">Выберите диалог</h2>
-                  <p className="mt-2 text-sm leading-6 text-[#777]">Здесь можно написать сотруднику, обсудить вопрос с отделом или ответить по заявке.</p>
+                  <h2 className="mt-4 text-lg font-semibold text-[#252525]">Выберите переписку</h2>
+                  <p className="mt-1.5 text-sm leading-6 text-[#7c7f84]">Откройте чат слева или начните новый диалог.</p>
                 </div>
               </div>
             ) : (
               <>
-                <header className="flex min-h-[76px] items-center gap-3 border-b border-[#e3e3e3] bg-white px-3 py-3 sm:px-5">
-                  <button type="button" className="btn h-10 w-10 shrink-0 p-0 md:hidden" onClick={() => setSelection(null)} aria-label="Назад">
+                <header className="flex min-h-[68px] items-center gap-3 border-b border-[#e5e5e2] bg-white/95 px-3 py-2.5 backdrop-blur sm:px-5">
+                  <button type="button" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#555] hover:bg-[#f1f1ef] md:hidden" onClick={() => setSelection(null)} aria-label="Назад">
                     <ArrowLeft size={17} className="mx-auto" />
                   </button>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8ecf1] text-xs font-semibold text-[#2d3c54]">
+                    {selectedChat?.kind === 'DIRECT'
+                      ? getInitials(getDirectPeer(selectedChat, user?.id)?.name || currentTitle)
+                      : selectedTicket
+                        ? <Ticket size={17} />
+                        : selectedChat?.kind === 'DEPARTMENT'
+                          ? <Building2 size={17} />
+                          : <Users size={17} />}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <h2 className="truncate text-base font-semibold text-[#222]">{currentTitle}</h2>
-                      <span className="chip shrink-0">{currentKind}</span>
-                    </div>
-                    <p className="mt-0.5 truncate text-xs text-[#858585]">{currentSubtitle}</p>
+                    <h2 className="truncate text-[14px] font-semibold text-[#222]">{currentTitle}</h2>
+                    <p className="mt-0.5 truncate text-[11px] text-[#858580]">{currentKind} · {currentSubtitle}</p>
                   </div>
                   <button
                     type="button"
-                    className="btn inline-flex h-10 items-center gap-2"
+                    className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]"
                     onClick={() => setMembersOpen(true)}
                     title="Участники переписки"
                   >
@@ -661,45 +687,53 @@ export const ChatsPage: React.FC = () => {
                     <span className="hidden lg:inline">Участники</span>
                   </button>
                   {selectedTicket && (
-                    <button type="button" className="btn inline-flex h-10 items-center gap-2" onClick={() => navigate(`/tickets?taskId=${selectedTicket.id}`)}>
+                    <button type="button" className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]" onClick={() => navigate(`/tickets?taskId=${selectedTicket.id}`)}>
                       <ExternalLink size={15} />
                       <span className="hidden lg:inline">Заявка</span>
                     </button>
                   )}
                 </header>
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-6">
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto px-3 py-5 sm:px-7"
+                  style={{
+                    backgroundImage:
+                      'radial-gradient(circle at 12% 8%, rgba(255,255,255,0.75), transparent 28%), radial-gradient(circle at 88% 92%, rgba(224,229,236,0.55), transparent 30%)',
+                  }}
+                >
                   {messagesLoading ? (
                     <DataState variant="loading" message="Загружаем переписку..." />
                   ) : selection.type === 'chat' ? (
                     messages.length === 0 ? (
                       <DataState variant="empty" message="В диалоге пока нет сообщений. Напишите первым или прикрепите файл." />
                     ) : (
-                      <div className="mx-auto max-w-3xl space-y-2">
+                      <div className="mx-auto max-w-4xl space-y-1.5">
                         {messages.map((message, index) => {
                           const own = message.authorId === user?.id;
                           const showDay = index === 0 || !sameDay(messages[index - 1]?.createdAt, message.createdAt);
                           return (
                             <React.Fragment key={message.id}>
                               {showDay && (
-                                <div className="flex justify-center py-2">
-                                  <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#858585] shadow-sm">
+                                <div className="flex items-center gap-3 py-3">
+                                  <span className="h-px flex-1 bg-[#dfe2e5]" />
+                                  <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#96999d]">
                                     {getDayLabel(message.createdAt)}
                                   </span>
+                                  <span className="h-px flex-1 bg-[#dfe2e5]" />
                                 </div>
                               )}
                               <div className={`group flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}>
                                 {!own && (
-                                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-[#555] shadow-sm">
+                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#dde3ea] text-[10px] font-semibold text-[#3f4f64]">
                                     {getInitials(message.author.name)}
                                   </div>
                                 )}
-                                <div className={`flex max-w-[84%] flex-col ${own ? 'items-end' : 'items-start'} sm:max-w-[70%]`}>
-                                  {!own && <p className="mb-1 px-1 text-xs font-medium text-[#686868]">{message.author.name}</p>}
-                                  <div className={`rounded-[18px] px-3.5 py-2.5 shadow-sm ${
+                                <div className={`flex max-w-[86%] flex-col ${own ? 'items-end' : 'items-start'} sm:max-w-[72%]`}>
+                                  {!own && <p className="mb-1 px-1 text-[11px] font-medium text-[#676d75]">{message.author.name}</p>}
+                                  <div className={`rounded-[17px] px-3.5 py-2.5 ${
                                     own
-                                      ? 'rounded-br-[6px] bg-[#2f2f2f] text-white'
-                                      : 'rounded-bl-[6px] border border-[#e2e2df] bg-white text-[#292929]'
+                                      ? 'rounded-br-[5px] bg-[#2d3c54] text-white shadow-[0_5px_14px_rgba(45,60,84,0.16)]'
+                                      : 'rounded-bl-[5px] border border-[#e0e3e6] bg-white text-[#292929] shadow-[0_3px_10px_rgba(35,40,46,0.05)]'
                                   }`}>
                                     {message.content && <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>}
                                     {message.attachments?.length > 0 && (
@@ -709,7 +743,7 @@ export const ChatsPage: React.FC = () => {
                                             key={attachment.id}
                                             type="button"
                                             className={`flex w-full min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
-                                              own ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[#e5e5e2] bg-[#f7f7f5] hover:bg-[#f0f0ed]'
+                                              own ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[#e4e6e8] bg-[#f5f6f7] hover:bg-[#eef0f2]'
                                             }`}
                                             onClick={() => void downloadChatAttachment(attachment)}
                                           >
@@ -731,7 +765,7 @@ export const ChatsPage: React.FC = () => {
                                     </div>
                                   </div>
                                   {own && (
-                                    <div className="mt-1 flex gap-2 px-1 text-[11px] opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                                  <div className="mt-1 flex gap-2 px-1 text-[10px] opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
                                       {message.content && <button type="button" onClick={() => void editInternalMessage(message)} className="text-[#7c7c7c] hover:text-[#333]">Изменить</button>}
                                       <button type="button" onClick={() => void deleteInternalMessage(message)} className="text-[#a36b6b] hover:text-[#963737]">Удалить</button>
                                     </div>
@@ -747,7 +781,7 @@ export const ChatsPage: React.FC = () => {
                   ) : ticketTimeline.length === 0 ? (
                     <DataState variant="empty" message="В заявке пока нет сообщений и файлов. Ответ появится одновременно здесь и в карточке заявки." />
                   ) : (
-                    <div className="mx-auto max-w-3xl space-y-2">
+                    <div className="mx-auto max-w-4xl space-y-1.5">
                       {ticketTimeline.map((item, index) => {
                         const own = item.type === 'message'
                           ? item.message.authorId === user?.id
@@ -756,15 +790,17 @@ export const ChatsPage: React.FC = () => {
                         return (
                           <React.Fragment key={`${item.type}:${item.id}`}>
                             {showDay && (
-                              <div className="flex justify-center py-2">
-                                <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-[#858585] shadow-sm">{getDayLabel(item.createdAt)}</span>
+                              <div className="flex items-center gap-3 py-3">
+                                <span className="h-px flex-1 bg-[#dfe2e5]" />
+                                <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[#96999d]">{getDayLabel(item.createdAt)}</span>
+                                <span className="h-px flex-1 bg-[#dfe2e5]" />
                               </div>
                             )}
                             <div className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[84%] rounded-[18px] px-3.5 py-2.5 shadow-sm sm:max-w-[70%] ${
+                              <div className={`max-w-[86%] rounded-[17px] px-3.5 py-2.5 sm:max-w-[72%] ${
                                 own
-                                  ? 'rounded-br-[6px] bg-[#2f2f2f] text-white'
-                                  : 'rounded-bl-[6px] border border-[#e2e2df] bg-white text-[#292929]'
+                                  ? 'rounded-br-[5px] bg-[#2d3c54] text-white shadow-[0_5px_14px_rgba(45,60,84,0.16)]'
+                                  : 'rounded-bl-[5px] border border-[#e0e3e6] bg-white text-[#292929] shadow-[0_3px_10px_rgba(35,40,46,0.05)]'
                               }`}>
                                 {item.type === 'message' ? (
                                   <>
@@ -775,7 +811,7 @@ export const ChatsPage: React.FC = () => {
                                   <button
                                     type="button"
                                     className={`flex min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
-                                      own ? 'border-white/20 bg-white/10' : 'border-[#e5e5e2] bg-[#f7f7f5]'
+                                      own ? 'border-white/20 bg-white/10' : 'border-[#e4e6e8] bg-[#f5f6f7]'
                                     }`}
                                     onClick={() => void filesApi.downloadTaskFile(item.file.id, item.file.filename)}
                                   >
@@ -800,11 +836,11 @@ export const ChatsPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="border-t border-[#e3e3e3] bg-white p-3 sm:p-4">
+                <div className="bg-[#f3f5f7] px-3 pb-3 pt-2 sm:px-7 sm:pb-4">
                   {canSend ? (
-                    <div className="mx-auto max-w-3xl">
+                    <div className="mx-auto max-w-4xl">
                       {selectedFile && (
-                        <div className="mb-2 flex items-center gap-3 rounded-[11px] border border-[#dedede] bg-[#f7f7f5] px-3 py-2">
+                        <div className="mb-2 flex items-center gap-3 rounded-[12px] border border-[#dfe2e5] bg-white px-3 py-2 shadow-sm">
                           <FileText size={17} className="shrink-0 text-[#606060]" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-medium text-[#333]">{selectedFile.name}</p>
@@ -815,7 +851,7 @@ export const ChatsPage: React.FC = () => {
                           </button>
                         </div>
                       )}
-                      <div className="flex items-end gap-2 rounded-[15px] border border-[#dcdcdc] bg-[#fafafa] p-1.5 focus-within:border-[#a9a9a9]">
+                      <div className="flex items-end gap-1.5 rounded-[18px] border border-[#d8dce1] bg-white p-1.5 shadow-[0_8px_26px_rgba(35,40,46,0.09)] transition focus-within:border-[#aeb7c3] focus-within:shadow-[0_9px_28px_rgba(45,60,84,0.12)]">
                         <input
                           ref={fileInputRef}
                           type="file"
@@ -824,7 +860,7 @@ export const ChatsPage: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] text-[#666] hover:bg-white hover:text-[#2f2f2f]"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#737981] transition hover:bg-[#f1f3f5] hover:text-[#2d3c54]"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={!settings.attachmentsEnabled || sending}
                           title={settings.attachmentsEnabled ? `Прикрепить файл до ${settings.maxAttachmentSizeMb} МБ` : 'Вложения отключены'}
@@ -833,7 +869,7 @@ export const ChatsPage: React.FC = () => {
                           <Paperclip size={18} />
                         </button>
                         <textarea
-                          className="max-h-32 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm outline-none"
+                          className="max-h-32 min-h-[40px] flex-1 resize-none border-0 bg-transparent px-1.5 py-2.5 text-sm leading-5 outline-none placeholder:text-[#a0a3a7]"
                           value={draft}
                           onChange={(event) => setDraft(event.target.value)}
                           onKeyDown={(event) => {
@@ -847,7 +883,7 @@ export const ChatsPage: React.FC = () => {
                         />
                         <button
                           type="button"
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#2f2f2f] text-white transition hover:bg-[#1f1f1f] disabled:cursor-not-allowed disabled:opacity-40"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2d3c54] text-white transition hover:bg-[#223046] disabled:cursor-not-allowed disabled:opacity-35"
                           onClick={() => void sendMessage()}
                           disabled={sending || (!draft.trim() && !selectedFile)}
                           aria-label="Отправить"
@@ -855,7 +891,7 @@ export const ChatsPage: React.FC = () => {
                           <Send size={17} />
                         </button>
                       </div>
-                      <p className="mt-1.5 px-1 text-[10px] text-[#999]">Enter — отправить · Shift + Enter — новая строка</p>
+                      <p className="mt-1.5 hidden px-2 text-[9px] text-[#9b9ea2] sm:block">Enter — отправить · Shift + Enter — новая строка</p>
                     </div>
                   ) : (
                     <p className="text-center text-sm text-[#858585]">Для вашей роли переписка доступна только для чтения.</p>

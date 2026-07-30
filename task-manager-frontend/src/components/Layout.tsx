@@ -1,12 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, BookOpen, ChevronRight, Home, LifeBuoy, MessageCircle, Plus, Ticket } from 'lucide-react';
+import {
+  Bell,
+  BookOpen,
+  ChevronRight,
+  Home,
+  LayoutGrid,
+  LifeBuoy,
+  MessageCircle,
+  MoreHorizontal,
+  Plus,
+  Ticket,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { chatsApi, notificationsApi } from '../api';
 import type { Notification } from '../types';
 import { APP_NAV_ITEMS, canAccessModule, canCreateTasks } from '../access';
-import { formatDateTime, getInitials, getRoleLabel } from '../utils';
+import { formatDateTime, getInitials } from '../utils';
 import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
 
 const notificationTypeLabels: Record<string, string> = {
@@ -135,6 +146,25 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           ? 'Помощь'
           : item.label,
     }));
+  const primaryNavItems = visibleNavItems.filter((item) => (
+    ['/', '/tickets', '/chats', '/queue', '/knowledge'].includes(item.path)
+  ));
+  const secondaryNavItems = visibleNavItems.filter((item) => (
+    !['/', '/tickets', '/chats', '/queue', '/knowledge'].includes(item.path)
+  ));
+  const isNavItemActive = (path: string) => (
+    location.pathname === path
+    || (path === '/tickets' && location.pathname === '/tasks')
+    || (path === '/queue' && location.pathname === '/kanban')
+  );
+  const getNavIcon = (path: string) => {
+    if (path === '/') return Home;
+    if (path === '/tickets') return Ticket;
+    if (path === '/chats') return MessageCircle;
+    if (path === '/queue') return LayoutGrid;
+    if (path === '/knowledge') return BookOpen;
+    return null;
+  };
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
@@ -334,50 +364,40 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           'radial-gradient(circle at top left, rgba(226,233,236,0.85) 0%, rgba(226,233,236,0) 28%), radial-gradient(circle at top right, rgba(244,238,228,0.9) 0%, rgba(244,238,228,0) 24%), var(--bg-page)',
       }}
     >
-      <header className="sticky top-0 z-30 px-3 pb-3 pt-3 backdrop-blur-sm sm:px-4 sm:pb-4 sm:pt-4">
-        <div className="mx-auto max-w-[1440px] rounded-[18px] border border-white/80 bg-[rgba(255,255,255,0.9)] px-3 py-3 shadow-[0_14px_34px_rgba(0,0,0,0.08)] sm:px-4">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3">
-            <Link to="/" className="flex min-w-0 items-center gap-3 rounded-[14px] transition-opacity hover:opacity-85" aria-label="На главную">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[13px] bg-[#2f2f2f] text-white shadow-[0_10px_22px_rgba(0,0,0,0.17)]">
-                <LifeBuoy size={21} />
+      <header className="sticky top-0 z-30 border-b border-[#e7e7e5] bg-white/95 backdrop-blur-xl">
+        <div className="mx-auto max-w-[1440px] px-3 sm:px-4">
+          <div className="flex h-[58px] items-center gap-2.5">
+            <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-[10px] transition-opacity hover:opacity-80" aria-label="На главную">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#252525] text-white">
+                <LifeBuoy size={18} />
               </div>
-              <div className="min-w-0">
+              <div className="hidden min-w-0 xl:block">
                 {settings?.companyName?.trim() && settings.companyName.trim() !== settings.portalName.trim() && (
-                  <p className="truncate text-[11px] uppercase tracking-[0.18em] text-[#8b8b8b]" data-testid="layout-company-name">
+                  <p className="truncate text-[9px] font-medium uppercase tracking-[0.16em] text-[#999]" data-testid="layout-company-name">
                     {settings.companyName}
                   </p>
                 )}
-                <p className="truncate text-sm font-semibold text-[#1f1f1f]" data-testid="layout-portal-name">
+                <p className="truncate text-[13px] font-semibold leading-4 text-[#242424]" data-testid="layout-portal-name">
                   {settings?.portalName?.trim() || 'Office ServiceDesk'}
                 </p>
               </div>
             </Link>
 
-            <nav className="col-span-2 row-start-2 min-w-0">
-              <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1 lg:justify-center">
-                {visibleNavItems.map((item) => {
-                  const active = location.pathname === item.path || (item.path === '/tickets' && location.pathname === '/tasks') || (item.path === '/queue' && location.pathname === '/kanban');
-                  const RequesterNavIcon = isRequester
-                    ? item.path === '/'
-                      ? Home
-                      : item.path === '/tickets'
-                        ? Ticket
-                        : item.path === '/knowledge'
-                          ? BookOpen
-                          : null
-                    : null;
-                  const NavIcon = item.path === '/chats' ? MessageCircle : RequesterNavIcon;
+            <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 lg:flex">
+              {primaryNavItems.map((item) => {
+                  const active = isNavItemActive(item.path);
+                  const NavIcon = getNavIcon(item.path);
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`inline-flex h-10 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[11px] border px-3 text-center text-sm font-medium transition-all ${
+                      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] px-2.5 text-center text-[13px] font-medium transition-colors xl:px-3 ${
                         active
-                          ? 'border-[#2f2f2f] bg-[#2f2f2f] text-white shadow-[0_10px_20px_rgba(0,0,0,0.14)]'
-                          : 'border-[#dddddd] bg-white/90 text-[#3f3f3f] hover:border-[#c3c3c3] hover:bg-white'
+                          ? 'bg-[#292929] text-white'
+                          : 'text-[#5f5f5f] hover:bg-[#f2f2f0] hover:text-[#222]'
                       }`}
                     >
-                      {NavIcon && <NavIcon size={15} />}
+                      {NavIcon && <NavIcon size={14} strokeWidth={1.9} />}
                       <span>{item.label}</span>
                       {item.path === '/chats' && chatUnreadCount > 0 && (
                         <span className={`flex min-h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
@@ -388,46 +408,66 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       )}
                     </Link>
                   );
-                })}
-              </div>
+              })}
+              {secondaryNavItems.length > 0 && (
+                <details className="group relative shrink-0">
+                  <summary className={`flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] font-medium transition-colors [&::-webkit-details-marker]:hidden ${
+                    secondaryNavItems.some((item) => isNavItemActive(item.path))
+                      ? 'bg-[#292929] text-white'
+                      : 'text-[#5f5f5f] hover:bg-[#f2f2f0] hover:text-[#222]'
+                  }`}>
+                    <MoreHorizontal size={16} />
+                    <span className="hidden xl:inline">Ещё</span>
+                  </summary>
+                  <div className="absolute right-0 top-11 w-56 rounded-[13px] border border-[#e2e2e0] bg-white p-1.5 shadow-[0_18px_44px_rgba(0,0,0,0.12)]">
+                    {secondaryNavItems.map((item) => (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        className={`flex h-10 items-center rounded-[9px] px-3 text-sm font-medium ${
+                          isNavItemActive(item.path)
+                            ? 'bg-[#f0f0ee] text-[#222]'
+                            : 'text-[#555] hover:bg-[#f6f6f4] hover:text-[#222]'
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </details>
+              )}
             </nav>
 
-            <div className="col-start-2 row-start-1 flex min-w-0 items-center justify-end gap-2">
+            <div className="ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5">
               {canCreateTasks(user?.role) && (
                 <>
                   <Link
                     to="/tickets?create=1"
-                    className="hidden h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] bg-[#2f2f2f] px-3 text-sm font-medium text-white shadow-[0_8px_18px_rgba(0,0,0,0.12)] transition hover:bg-[#1f1f1f] sm:inline-flex"
+                    className="hidden h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-[9px] bg-[#292929] px-3 text-[13px] font-medium text-white transition hover:bg-[#171717] sm:inline-flex"
                     data-testid="header-create-ticket"
                   >
-                    <Plus size={16} />
+                    <Plus size={15} />
                     Новая заявка
                   </Link>
                   <Link
                     to="/tickets?create=1"
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] bg-[#2f2f2f] text-white shadow-[0_8px_18px_rgba(0,0,0,0.12)] sm:hidden"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-[9px] bg-[#292929] text-white sm:hidden"
                     aria-label="Создать заявку"
                   >
-                    <Plus size={18} />
+                    <Plus size={17} />
                   </Link>
                 </>
-              )}
-              {user && (
-                <div className="hidden max-w-[180px] rounded-[13px] border border-[#e6e6e6] bg-[#f8f8f8] px-3 py-1.5 text-right min-[1400px]:block">
-                  <p className="truncate text-sm font-semibold text-[#1f1f1f]">{user.name}</p>
-                  <p className="text-xs text-[#8a8a8a]">{getRoleLabel(user.role)}</p>
-                </div>
               )}
 
               <div className="relative" ref={notificationsRef}>
                 <button
                   type="button"
-                  className="relative flex h-10 w-10 items-center justify-center rounded-[10px] border border-[#dddddd] bg-white"
+                  className="relative flex h-9 w-9 items-center justify-center rounded-[9px] text-[#4f4f4f] transition-colors hover:bg-[#f1f1ef] hover:text-[#222]"
                   onClick={() => void openNotifications()}
                   data-testid="notification-bell"
                   aria-label="Открыть уведомления"
                 >
-                  <Bell size={18} className="text-[#353535]" />
+                  <Bell size={17} />
                   {unreadCount > 0 && (
                     <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#2f2f2f] px-1 text-[10px] text-white">
                       {unreadCount > 99 ? '99+' : unreadCount}
@@ -504,7 +544,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <button
                   type="button"
                   onClick={() => setProfileMenuOpen((value) => !value)}
-                  className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[10px] border border-[#dddddd] bg-white text-sm font-semibold text-[#353535]"
+                  className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#ececea] text-xs font-semibold text-[#353535] ring-1 ring-[#ddddda] transition hover:ring-[#bfbfbb]"
+                  aria-label="Открыть профиль"
                 >
                   {avatarDataUrl ? (
                     <img src={avatarDataUrl} alt={user?.name || 'Профиль'} className="h-full w-full object-cover" />
@@ -534,6 +575,32 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </div>
             </div>
           </div>
+
+          <nav className="flex min-w-0 gap-1 overflow-x-auto border-t border-[#ededeb] py-1.5 lg:hidden">
+            {visibleNavItems.map((item) => {
+              const active = isNavItemActive(item.path);
+              const NavIcon = getNavIcon(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[8px] px-2.5 text-xs font-medium ${
+                    active ? 'bg-[#292929] text-white' : 'text-[#666] hover:bg-[#f2f2f0]'
+                  }`}
+                >
+                  {NavIcon && <NavIcon size={13} />}
+                  <span>{item.label}</span>
+                  {item.path === '/chats' && chatUnreadCount > 0 && (
+                    <span className={`flex min-h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] ${
+                      active ? 'bg-white text-[#292929]' : 'bg-[#292929] text-white'
+                    }`}>
+                      {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
       </header>
 
@@ -607,7 +674,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       )}
 
-      <main className="mx-auto max-w-[1440px] px-4 pb-10">{children}</main>
+      <main className="mx-auto max-w-[1440px] px-3 pb-6 pt-3 sm:px-4 sm:pt-4">{children}</main>
     </div>
   );
 };
