@@ -191,6 +191,18 @@ if (!hasRequiredEnv) {
             .send({ status: 'IN_PROGRESS' })
             .expect(403);
 
+        await request(app)
+            .post(`/api/tasks/${visibleTask.id}/assignees`)
+            .set('Authorization', `Bearer ${tokens.teamAgent}`)
+            .send({ userId: teamAgent.id })
+            .expect(201);
+
+        await request(app)
+            .post(`/api/tasks/${visibleTask.id}/assignees`)
+            .set('Authorization', `Bearer ${tokens.strangerAgent}`)
+            .send({ userId: strangerAgent.id })
+            .expect(403);
+
         const teamAgentStatus = await request(app)
             .patch(`/api/tasks/${visibleTask.id}/status`)
             .set('Authorization', `Bearer ${tokens.teamAgent}`)

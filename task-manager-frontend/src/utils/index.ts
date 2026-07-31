@@ -181,8 +181,6 @@ export function getAvailableTaskStatusOptions(
     isAuthor?: boolean;
   }
 ): Array<{ value: TaskStatus; label: string }> {
-  void options;
-
   if (!role || role === 'VIEWER') {
     return [];
   }
@@ -197,6 +195,9 @@ export function getAvailableTaskStatusOptions(
   }
 
   if (role === 'AGENT') {
+    if (!options?.isAssignee) {
+      return [];
+    }
     return (AGENT_STATUS_TRANSITIONS[currentStatus] || []).map((status) => ({
       value: status,
       label: statusLabels[status],

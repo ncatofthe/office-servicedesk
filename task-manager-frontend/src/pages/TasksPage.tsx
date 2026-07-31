@@ -110,15 +110,16 @@ const getExternalReference = (task: TaskSummary) =>
 
 const getActionErrorMessage = (error: unknown, fallback: string) => {
   const response = (error as { response?: { status?: number } })?.response;
+  const apiMessage = getApiErrorMessage(error, '');
 
   if (response?.status === 403) {
-    return 'Недостаточно прав для этого действия. Обновите список или обратитесь к администратору.';
+    return apiMessage || 'Недостаточно прав для этого действия. Обновите список или обратитесь к администратору.';
   }
   if (response?.status === 404) {
     return 'Заявка больше недоступна. Обновите список и попробуйте снова.';
   }
   if (response?.status === 409) {
-    return 'Действие не выполнено: заявка уже была изменена другим пользователем.';
+    return apiMessage || 'Действие не выполнено: заявка уже была изменена другим пользователем.';
   }
   if (response?.status === 429) {
     return 'Слишком много запросов. Подождите несколько секунд и повторите действие.';
@@ -633,7 +634,9 @@ export const TasksPage: React.FC = () => {
       isAuthor: user?.id === task.author.id,
     });
     const nextStatus = taskStatusOptions[0]?.value;
-    const canAssignSelf = Boolean(user && (user.role === 'ADMIN' || user.role === 'AGENT') && !isMyTask(task));
+    const hasAssignees = Boolean(task.assignees?.length);
+    const isAssignedToAnotherAgent = Boolean(user?.role === 'AGENT' && hasAssignees && !isMyTask(task));
+    const canAssignSelf = Boolean(user && (user.role === 'ADMIN' || user.role === 'AGENT') && !hasAssignees);
 
     return (
       <div className="flex flex-wrap items-center justify-end gap-2 xl:flex-col xl:items-stretch xl:justify-start">
@@ -658,6 +661,9 @@ export const TasksPage: React.FC = () => {
           >
             {rowActionId === `status-${task.id}` ? 'Обновляем...' : nextStatus === 'IN_PROGRESS' ? 'Перевести в работу' : 'Закрыть'}
           </button>
+        )}
+        {isAssignedToAnotherAgent && (
+          <span className="text-center text-xs leading-4 text-[#8a8a8a]">Закреплена за другим исполнителем</span>
         )}
         <button type="button" className="btn btn-primary xl:w-full" onClick={() => setSelectedTaskId(task.id)} data-testid="task-inbox-open">
           Открыть

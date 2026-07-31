@@ -49,6 +49,8 @@ const STATUS_TRANSITIONS = {
     REWORK: ['IN_PROGRESS', 'DONE'],
     MERGED: []
 };
+const TASK_OWNERSHIP_LOCKED_ERROR = 'Task is assigned to another agent';
+const TASK_REASSIGN_ADMIN_ONLY_ERROR = 'Only administrators can reassign tasks';
 const TASK_SERVICEDESK_FIELDS = ['folderId', 'entityId', 'typeId', 'subtypeId'];
 const TASK_UPDATE_FIELDS = ['title', 'description', 'priority', 'startDate', 'dueDate', 'progress', 'departmentId', 'requesterCloseRequired', 'assigneeIds', ...TASK_SERVICEDESK_FIELDS];
 const TASK_UPDATE_MUTABLE_FIELDS = ['title', 'description', 'priority', 'startDate', 'dueDate', 'progress', 'departmentId', 'requesterCloseRequired'];
@@ -1043,6 +1045,11 @@ const update = async(id, data, actor) => {
         }
         assigneeIds = [...new Set(payload.assigneeIds.filter(Boolean))];
         assigneeIds = await assertAssignableAssigneeIds(assigneeIds);
+        const oldAssigneeIds = task.assignees.map((assignee) => assignee.userId).sort();
+        const requestedAssigneeIds = [...assigneeIds].sort();
+        if (!isAdminRole(actor.role) && JSON.stringify(oldAssigneeIds) !== JSON.stringify(requestedAssigneeIds)) {
+            throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
+        }
         const currentlyAssignedToActor = task.assignees.some((assignee) => assignee.userId === actor.id);
         if (task.status === 'DONE' && isAgentRole(actor.role) && assigneeIds.includes(actor.id) && !currentlyAssignedToActor) {
             throw new Error('Исполнитель не может назначить себя на закрытую заявку.');
@@ -1207,6 +1214,10 @@ const updateStatus = async(id, status, user) => {
         throw new Error('Viewers cannot change task status');
     } else if (isRequesterRole(user.role)) {
         throw new Error('Requesters cannot change task status');
+    }
+
+    if (!isAdmin && !isAssignee) {
+        throw new Error(TASK_OWNERSHIP_LOCKED_ERROR);
     }
 
     const allowed = isAdmin
@@ -1588,28 +1599,52 @@ const addAssignee = async(taskId, userId, actor) => {
 
     await assertTaskFolderManagementAccess(task, actor);
     await assertAssignableAssigneeIds([userId]);
+    const isAdmin = isAdminRole(actor.role);
+    if (!isAdmin && (!isAgentRole(actor.role) || userId !== actor.id)) {
+        throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
+    }
     if (task.status === 'DONE' && isAgentRole(actor.role) && userId === actor.id) {
         throw new Error('Исполнитель не может назначить себя на закрытую заявку.');
     }
 
-    const [assignee] = await prisma.$transaction(async(tx) => {
-        const createdAssignee = await tx.taskAssignee.create({
-            data: { taskId, userId }
-        });
-        const [userRecord] = await loadUsersByIds([userId], tx);
-        await safeRecordTimelineEvent({
-            taskId,
-            actorId: actor.id,
-            type: 'ASSIGNEE_ADDED',
-            title: 'Назначен исполнитель',
-            description: userRecord?.name || null,
-            metadata: {
-                assigneeId: userId,
-                assigneeName: userRecord?.name || null
+    let assignee;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            [assignee] = await prisma.$transaction(async(tx) => {
+                const currentTask = await tx.task.findUnique({
+                    where: { id: taskId },
+                    include: { assignees: true }
+                });
+                if (!currentTask) throw new Error('Task not found');
+                if (!isAdmin && currentTask.assignees.length > 0) {
+                    throw new Error(TASK_OWNERSHIP_LOCKED_ERROR);
+                }
+
+                const createdAssignee = await tx.taskAssignee.create({
+                    data: { taskId, userId }
+                });
+                const [userRecord] = await loadUsersByIds([userId], tx);
+                await safeRecordTimelineEvent({
+                    taskId,
+                    actorId: actor.id,
+                    type: 'ASSIGNEE_ADDED',
+                    title: 'Назначен исполнитель',
+                    description: userRecord?.name || null,
+                    metadata: {
+                        assigneeId: userId,
+                        assigneeName: userRecord?.name || null
+                    }
+                }, tx);
+                return [createdAssignee, userRecord || null];
+            }, { isolationLevel: 'Serializable' });
+            break;
+        } catch (error) {
+            if (error?.code === 'P2034' && attempt < 2) {
+                continue;
             }
-        }, tx);
-        return [createdAssignee, userRecord || null];
-    });
+            throw error;
+        }
+    }
 
     try {
         await notificationService.notifyTaskAssigned(taskId, userId, actor);
@@ -1633,6 +1668,9 @@ const removeAssignee = async(taskId, userId, actor) => {
     if (!task) throw new Error('Task not found');
 
     await assertTaskFolderManagementAccess(task, actor);
+    if (!isAdminRole(actor.role)) {
+        throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
+    }
 
     return prisma.$transaction(async(tx) => {
         const [userRecord] = await loadUsersByIds([userId], tx);

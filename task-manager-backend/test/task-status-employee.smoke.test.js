@@ -19,7 +19,7 @@ if (!hasRequiredEnv) {
         await prisma.$disconnect();
     });
 
-    test('assigned agent can move NEW -> IN_PROGRESS -> DONE, another agent with folder access can continue work, requester cannot change status', async(t) => {
+    test('assigned agent owns status changes while another queue agent cannot steal or close the task', async(t) => {
         const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const password = 'password123';
 
@@ -68,6 +68,7 @@ if (!hasRequiredEnv) {
         await prisma.supportTeamMember.createMany({
             data: [
                 { teamId: queueTeam.id, userId: authorAgent.id, role: 'Автор' },
+                { teamId: queueTeam.id, userId: assignedEmployee.id, role: 'Исполнитель' },
                 { teamId: queueTeam.id, userId: queueAgent.id, role: 'Исполнитель' }
             ],
             skipDuplicates: true
@@ -89,9 +90,20 @@ if (!hasRequiredEnv) {
 
         await request(app)
             .post(`/api/tasks/${createdTask.body.id}/assignees`)
-            .set('Authorization', `Bearer ${authorLogin.body.token}`)
+            .set('Authorization', `Bearer ${assignedEmployeeLogin.body.token}`)
             .send({ userId: assignedEmployee.id })
             .expect(201);
+
+        await request(app)
+            .post(`/api/tasks/${createdTask.body.id}/assignees`)
+            .set('Authorization', `Bearer ${queueAgentLogin.body.token}`)
+            .send({ userId: queueAgent.id })
+            .expect(409);
+
+        await request(app)
+            .delete(`/api/tasks/${createdTask.body.id}/assignees/${assignedEmployee.id}`)
+            .set('Authorization', `Bearer ${queueAgentLogin.body.token}`)
+            .expect(403);
 
         t.after(async() => {
             await prisma.supportTeamMember.deleteMany({ where: { teamId: queueTeam.id } });
@@ -126,13 +138,19 @@ if (!hasRequiredEnv) {
 
         assert.equal(inProgressResponse.body.status, 'IN_PROGRESS');
 
-        const queueAgentResponse = await request(app)
+        await request(app)
             .patch(`/api/tasks/${createdTask.body.id}/status`)
             .set('Authorization', `Bearer ${queueAgentLogin.body.token}`)
             .send({ status: 'DONE' })
+            .expect(403);
+
+        const doneResponse = await request(app)
+            .patch(`/api/tasks/${createdTask.body.id}/status`)
+            .set('Authorization', `Bearer ${assignedEmployeeLogin.body.token}`)
+            .send({ status: 'DONE' })
             .expect(200);
 
-        assert.equal(queueAgentResponse.body.status, 'DONE');
+        assert.equal(doneResponse.body.status, 'DONE');
 
         const persistedTask = await prisma.task.findUnique({
             where: { id: createdTask.body.id }

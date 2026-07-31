@@ -2,6 +2,8 @@ const taskService = require('../services/task.service.js');
 const emailOutboundService = require('../services/email-outbound.service.js');
 const cannedReplyService = require('../services/canned-reply.service.js');
 const timelineService = require('../services/timeline.service.js');
+const TASK_OWNERSHIP_LOCKED_ERROR = 'Task is assigned to another agent';
+const TASK_REASSIGN_ADMIN_ONLY_ERROR = 'Only administrators can reassign tasks';
 const {
     serializeTaskDetail,
     serializeTaskMergeInfo,
@@ -110,8 +112,10 @@ const update = async(req, res) => {
         const task = await taskService.update(req.params.id, normalizeServiceDeskAliases(req.body), req.user);
         res.json(serializeTaskSummary(task));
     } catch (error) {
-        if (error.message === 'Access denied') {
-            return res.status(403).json({ error: 'Access denied' });
+        if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
+            return res.status(403).json({ error: error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR
+                ? 'Переназначать исполнителей может только администратор.'
+                : 'Access denied' });
         }
         res.status(400).json({ error: error.message });
     }
@@ -137,8 +141,11 @@ const updateStatus = async(req, res) => {
             || error.message === 'Viewers cannot change task status'
             || error.message === 'Requesters cannot change task status'
             || error.message === 'Not assigned to task and not author'
+            || error.message === TASK_OWNERSHIP_LOCKED_ERROR
         ) {
-            return res.status(403).json({ error: 'Access denied' });
+            return res.status(403).json({ error: error.message === TASK_OWNERSHIP_LOCKED_ERROR
+                ? 'Заявка закреплена за другим исполнителем. Изменить её статус может только текущий исполнитель или администратор.'
+                : 'Access denied' });
         }
         res.status(400).json({ error: error.message });
     }
@@ -256,8 +263,11 @@ const addAssignee = async(req, res) => {
         const assignee = await taskService.addAssignee(req.params.id, userId, req.user);
         res.status(201).json(assignee);
     } catch (error) {
-        if (error.message === 'Access denied') {
-            return res.status(403).json({ error: 'Access denied' });
+        if (error.message === TASK_OWNERSHIP_LOCKED_ERROR) {
+            return res.status(409).json({ error: 'Заявку уже взял другой исполнитель. Обновите список.' });
+        }
+        if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
+            return res.status(403).json({ error: 'Сотрудник может взять только свободную заявку на себя. Переназначение доступно администратору.' });
         }
         res.status(400).json({ error: error.message });
     }
@@ -268,8 +278,8 @@ const removeAssignee = async(req, res) => {
         await taskService.removeAssignee(req.params.id, req.params.userId, req.user);
         res.status(200).json({ message: 'Assignee removed' });
     } catch (error) {
-        if (error.message === 'Access denied') {
-            return res.status(403).json({ error: 'Access denied' });
+        if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
+            return res.status(403).json({ error: 'Снять или заменить исполнителя может только администратор.' });
         }
         res.status(400).json({ error: error.message });
     }

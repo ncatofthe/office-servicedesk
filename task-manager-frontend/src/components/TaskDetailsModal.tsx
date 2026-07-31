@@ -538,6 +538,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
     : departmentOptions;
   const isAssignee = Boolean(task && task.assignees.some((assignee) => assignee.userId === user?.id));
   const isAuthor = Boolean(task && task.authorId === user?.id);
+  const isAssignedToAnotherAgent = Boolean(
+    task && user?.role === 'AGENT' && task.assignees.length > 0 && !isAssignee
+  );
   const statusActionOptions = task
     ? getAvailableTaskStatusOptions(task.status, user?.role, { isAssignee, isAuthor })
     : [];
@@ -1139,7 +1142,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
                         </button>
                       ))
                     ) : (
-                      <span className="chip">Нет доступных переходов</span>
+                      <span className="chip">
+                        {isAssignedToAnotherAgent ? 'Заявка закреплена за другим исполнителем' : 'Нет доступных переходов'}
+                      </span>
                     )
                   ) : (
                     <span className="chip">Только просмотр</span>
@@ -1861,7 +1866,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     </button>
                   ))
                 ) : (
-                  <span className="chip">Нет доступных переходов</span>
+                  <span className="chip">
+                    {isAssignedToAnotherAgent ? 'Заявка закреплена за другим исполнителем' : 'Нет доступных переходов'}
+                  </span>
                 )
               ) : (
                 <span className="chip">Только просмотр</span>
