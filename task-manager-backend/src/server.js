@@ -4,6 +4,7 @@ const app = require('./app.js');
 const { startBackupScheduler, stopBackupScheduler } = require('./services/backup.service.js');
 const { startEmailIntakeScheduler, stopEmailIntakeScheduler } = require('./services/email-intake.service.js');
 const { startEmailOutboxWorker, stopEmailOutboxWorker } = require('./services/email-outbox-worker.service.js');
+const { loadEmailSettings } = require('./services/email-settings.service.js');
 const PORT = process.env.PORT || 5001;
 
 // Graceful shutdown
@@ -25,11 +26,19 @@ process.on('SIGINT', async() => {
     process.exit(0);
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    startBackupScheduler();
-    startEmailIntakeScheduler();
-    startEmailOutboxWorker();
+const startServer = async() => {
+    await loadEmailSettings();
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        startBackupScheduler();
+        startEmailIntakeScheduler();
+        startEmailOutboxWorker();
+    });
+};
+
+startServer().catch((error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
 });
 
 module.exports = app;

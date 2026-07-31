@@ -5,6 +5,9 @@ const emailOutboundService = require('../services/email-outbound.service.js');
 const freshdeskImportService = require('../services/freshdesk-import.service.js');
 const freshdeskApiService = require('../services/freshdesk-api.service.js');
 const productSettingsService = require('../services/product-settings.service.js');
+const emailSettingsService = require('../services/email-settings.service.js');
+const { startEmailIntakeScheduler, stopEmailIntakeScheduler } = require('../services/email-intake.service.js');
+const { startEmailOutboxWorker, stopEmailOutboxWorker } = require('../services/email-outbox-worker.service.js');
 const {
     serializeFolder,
     serializeEntity,
@@ -490,6 +493,24 @@ const getEmailHealth = async(req, res) => {
     }
 };
 
+const getEmailSettings = async(req, res) => {
+    try { res.json(emailSettingsService.publicSettings(emailSettingsService.getRuntimeEmailSettings())); }
+    catch (error) { handleServiceDeskError(error, res); }
+};
+
+const updateEmailSettings = async(req, res) => {
+    try {
+        const settings = await emailSettingsService.updateEmailSettings(req.body || {});
+        stopEmailIntakeScheduler(); stopEmailOutboxWorker(); startEmailIntakeScheduler(); startEmailOutboxWorker();
+        res.json(settings);
+    } catch (error) { handleServiceDeskError(error, res); }
+};
+
+const testEmailSettings = async(req, res) => {
+    try { res.json(await emailSettingsService.testEmailConnection(String(req.body?.target || 'BOTH').toUpperCase())); }
+    catch (error) { handleServiceDeskError(error, res); }
+};
+
 const retryEmailOutboxMessage = async(req, res) => {
     try {
         const result = await emailOutboundService.retryOutboundMessageById(req.params.id, {
@@ -643,6 +664,9 @@ module.exports = {
     testAutomationRule,
     listEmailOutbox,
     getEmailHealth,
+    getEmailSettings,
+    updateEmailSettings,
+    testEmailSettings,
     retryEmailOutboxMessage,
     dryRunFreshdeskImport,
     createFreshdeskImport,

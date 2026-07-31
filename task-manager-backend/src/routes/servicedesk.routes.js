@@ -325,6 +325,9 @@ router.get(
     ...emailAdminOnly,
     controller.getEmailHealth
 );
+router.get('/servicedesk/admin/email-settings', ...emailAdminOnly, controller.getEmailSettings);
+router.patch('/servicedesk/admin/email-settings', ...emailAdminOnly, controller.updateEmailSettings);
+router.post('/servicedesk/admin/email-settings/test', ...emailAdminOnly, controller.testEmailSettings);
 router.post(
     '/servicedesk/admin/email-outbox/:id/retry',
     ...emailAdminOnly,

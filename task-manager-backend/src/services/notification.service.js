@@ -1,6 +1,7 @@
 const prisma = require('../prisma/prisma.js');
 const { queueOutboundEmail } = require('./email-outbound.service.js');
 const productSettingsService = require('./product-settings.service.js');
+const emailSettingsService = require('./email-settings.service.js');
 const {
     normalizeRole,
     isAdminRole,
@@ -54,10 +55,29 @@ const NOTIFICATION_INCLUDE = {
 
 const toBoolean = (value) => ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
 
-const getNotificationConfig = () => ({
-    emailEnabled: toBoolean(process.env.EMAIL_NOTIFICATIONS_ENABLED),
-    portalBaseUrl: String(process.env.PORTAL_BASE_URL || '').trim() || null
-});
+const getNotificationConfig = () => {
+    const settings = emailSettingsService.getRuntimeEmailSettings();
+    return { emailEnabled: settings.notificationsEnabled, portalBaseUrl: String(settings.portalBaseUrl || '').trim() || null };
+};
+
+const renderTemplate = (template, variables) => String(template || '').replace(/{{\s*([a-zA-Z0-9_]+)\s*}}/g, (_, key) => String(variables[key] ?? ''));
+const notificationVariables = (task, extra = {}) => {
+    const config = getNotificationConfig();
+    const url = buildTaskLink(task, config);
+    return { ticketNumber: task?.ticketNumber || '', title: task?.title || '', status: task?.status || '',
+        requesterName: task?.author?.name || task?.author?.email || 'пользователь', portalUrl: url || '',
+        portalLink: url ? `Открыть заявку: ${url}` : '', ...extra };
+};
+
+const queueRequesterTemplate = async(task, kind, extra = {}, db = prisma) => {
+    const settings = emailSettingsService.getRuntimeEmailSettings();
+    const enabled = settings.notificationsEnabled && settings[`notifyRequester${kind}`];
+    if (!enabled || !task?.author?.email || !(await productSettingsService.isFeatureEnabled('email', db))) return null;
+    const prefix = kind.charAt(0).toLowerCase() + kind.slice(1);
+    const variables = notificationVariables(task, extra);
+    return queueOutboundEmail({ taskId: task.id, actorId: null, to: task.author.email, recipientName: task.author.name || null,
+        subject: renderTemplate(settings[`${prefix}SubjectTemplate`], variables), text: renderTemplate(settings[`${prefix}BodyTemplate`], variables) }, { db });
+};
 
 const parseLimit = (value) => {
     const parsed = Number.parseInt(String(value || ''), 10);
@@ -399,7 +419,7 @@ const notifyTaskCreated = async(taskId, actor, options = {}) => {
     const title = channel === 'EMAIL' ? 'Новая заявка из почты' : 'Новая заявка';
     const message = `${buildTaskLabel(task)} создана и доступна в вашей папке.`;
 
-    return createNotificationsForUsers({
+    const results = await createNotificationsForUsers({
         users: folderAgents,
         type: channel === 'EMAIL' ? 'TASK_CREATED_EMAIL' : 'TASK_CREATED_WEB',
         title,
@@ -410,9 +430,11 @@ const notifyTaskCreated = async(taskId, actor, options = {}) => {
             channel,
             taskId: task.id
         },
-        sendEmail: true,
+        sendEmail: false,
         db
     });
+    await queueRequesterTemplate(task, 'Created', {}, db);
+    return results;
 };
 
 const notifyCommentCreated = async(taskId, comment, actor, options = {}) => {
@@ -462,7 +484,7 @@ const notifyCommentCreated = async(taskId, comment, actor, options = {}) => {
         const shouldEmailRequester = options.sendEmail === undefined
             ? true
             : Boolean(options.sendEmail);
-        return createNotificationsForUsers({
+        const results = await createNotificationsForUsers({
             users: [task.author],
             type: 'AGENT_PUBLIC_COMMENT',
             title: 'Новый ответ по заявке',
@@ -473,9 +495,11 @@ const notifyCommentCreated = async(taskId, comment, actor, options = {}) => {
                 commentId: comment.id,
                 visibility: 'PUBLIC'
             },
-            sendEmail: shouldEmailRequester,
+            sendEmail: false,
             db
         });
+        if (shouldEmailRequester) await queueRequesterTemplate(task, 'Comment', { comment: comment.content || comment.text || '' }, db);
+        return results;
     }
 
     return [];
@@ -503,7 +527,7 @@ const notifyTaskAssigned = async(taskId, assigneeUserId, actor, options = {}) =>
         return null;
     }
 
-    return createNotificationsForUsers({
+    const results = await createNotificationsForUsers({
         users: [recipient],
         type: 'TASK_ASSIGNED',
         title: 'Вам назначена заявка',
@@ -516,6 +540,8 @@ const notifyTaskAssigned = async(taskId, assigneeUserId, actor, options = {}) =>
         },
         db
     });
+    if (task.author?.id !== actor?.id) await queueRequesterTemplate(task, 'Assigned', { assigneeName: recipient.name || recipient.email }, db);
+    return results;
 };
 
 const notifyTaskStatusChanged = async(taskId, oldStatus, newStatus, actor, options = {}) => {
@@ -526,7 +552,7 @@ const notifyTaskStatusChanged = async(taskId, oldStatus, newStatus, actor, optio
     }
 
     const recipients = dedupeRecipients([task.author, ...task.assignees.map((item) => item.user)], [actor?.id]);
-    return createNotificationsForUsers({
+    const results = await createNotificationsForUsers({
         users: recipients,
         type: 'TASK_STATUS_CHANGED',
         title: 'Статус заявки изменён',
@@ -539,6 +565,8 @@ const notifyTaskStatusChanged = async(taskId, oldStatus, newStatus, actor, optio
         },
         db
     });
+    if (task.author?.id !== actor?.id) await queueRequesterTemplate(task, 'Status', { oldStatus, status: newStatus }, db);
+    return results;
 };
 
 const notifyTaskMerged = async(masterTaskId, childTaskIds, actor, options = {}) => {
@@ -747,6 +775,7 @@ module.exports = {
     notifyTaskAssigned,
     notifyTaskStatusChanged,
     notifyTaskMerged,
+    renderTemplate,
     handleEmailOutboxFailureEvent,
     handleEmailOutboxRecoveryEvent
 };

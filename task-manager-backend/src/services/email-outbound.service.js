@@ -1,6 +1,7 @@
 const nodemailer = require('nodemailer');
 const prisma = require('../prisma/prisma.js');
 const productSettingsService = require('./product-settings.service.js');
+const emailSettingsService = require('./email-settings.service.js');
 const { markTaskFirstResponse } = require('./sla.service.js');
 const { safeRecordTimelineEvent } = require('./timeline.service.js');
 const { isAdminRole, isAgentRole } = require('../utils/roles.js');
@@ -89,24 +90,27 @@ const maskValue = (value, { visibleStart = 2, visibleEnd = 2 } = {}) => {
     return `${normalized.slice(0, visibleStart)}***${normalized.slice(-visibleEnd)}`;
 };
 
-const getEmailOutboundConfig = () => ({
-    workerEnabled: toBoolean(process.env.EMAIL_OUTBOX_WORKER_ENABLED),
-    workerIntervalMs: parseIntegerEnv('EMAIL_OUTBOX_WORKER_INTERVAL_MS', EMAIL_OUTBOX_DEFAULT_WORKER_INTERVAL_MS, 5000),
-    workerBatchSize: parseIntegerEnv('EMAIL_OUTBOX_WORKER_BATCH_SIZE', EMAIL_OUTBOX_DEFAULT_WORKER_BATCH_SIZE, 1),
-    lockTtlMs: parseIntegerEnv('EMAIL_OUTBOX_LOCK_TTL_MS', EMAIL_OUTBOX_DEFAULT_LOCK_TTL_MS, 1000),
-    maxAttempts: parseIntegerEnv('EMAIL_OUTBOX_MAX_ATTEMPTS', EMAIL_OUTBOX_DEFAULT_MAX_ATTEMPTS, 1),
-    enabled: toBoolean(process.env.EMAIL_OUTBOUND_ENABLED),
-    host: process.env.EMAIL_SMTP_HOST || 'smtp.yandex.ru',
-    port: parseIntegerEnv('EMAIL_SMTP_PORT', 465, 1),
-    secure: process.env.EMAIL_SMTP_SECURE === undefined ? true : toBoolean(process.env.EMAIL_SMTP_SECURE),
-    user: process.env.EMAIL_SMTP_USER,
-    password: process.env.EMAIL_SMTP_PASSWORD,
-    fromAddress: process.env.EMAIL_FROM_ADDRESS || process.env.EMAIL_SMTP_USER,
-    fromName: process.env.EMAIL_FROM_NAME || 'Office ServiceDesk',
-    retryDelayMinutes: parseIntegerEnv('EMAIL_OUTBOUND_RETRY_DELAY_MINUTES', 15, 1),
+const getEmailOutboundConfig = () => {
+    const settings = emailSettingsService.getRuntimeEmailSettings();
+    return {
+    workerEnabled: settings.workerEnabled,
+    workerIntervalMs: settings.workerIntervalMs,
+    workerBatchSize: settings.workerBatchSize,
+    lockTtlMs: settings.lockTtlMs,
+    maxAttempts: settings.maxAttempts,
+    enabled: settings.outboundEnabled,
+    host: settings.smtpHost,
+    port: settings.smtpPort,
+    secure: settings.smtpSecure,
+    user: settings.smtpUser,
+    password: settings.smtpPassword,
+    fromAddress: settings.fromAddress || settings.smtpUser,
+    fromName: settings.fromName,
+    retryDelayMinutes: settings.retryDelayMinutes,
     // legacy option, keep for compatibility with existing installations
     retryBatchLimit: parseIntegerEnv('EMAIL_OUTBOUND_RETRY_BATCH_LIMIT', EMAIL_OUTBOX_DEFAULT_WORKER_BATCH_SIZE, 1)
-});
+    };
+};
 
 const requireSmtpConfig = (config) => {
     const missing = [];
@@ -536,6 +540,9 @@ const queueOutboundEmail = async(payloadInput, options = {}) => {
             subject: payload.subject,
             text: payload.text,
             headers: {
+                'Auto-Submitted': 'auto-generated',
+                'X-Auto-Response-Suppress': 'All',
+                'X-ServiceDesk-Notification': 'true',
                 ...(payload.inReplyTo ? { 'In-Reply-To': payload.inReplyTo } : {}),
                 ...(payload.references ? { References: payload.references } : {})
             }
@@ -658,7 +665,7 @@ const sendTaskEmailReply = async(taskId, message, actor, options = {}) => {
             to: payload.to,
             subject: payload.subject,
             text: payload.text,
-            headers: payload.headers
+            headers: { ...payload.headers, 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All', 'X-ServiceDesk-Notification': 'true' }
         });
         const sentOutbox = await markOutboxAsSent(db, outbox.id, sent);
 

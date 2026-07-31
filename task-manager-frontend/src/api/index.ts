@@ -55,6 +55,9 @@ import type {
   EmailOutboxHealth,
   EmailOutboxQuery,
   EmailOutboxRetryResponse,
+  EmailSettingsAdmin,
+  UpdateEmailSettingsInput,
+  EmailConnectionTest,
   FreshdeskImportPayload,
   FreshdeskImportResult,
   FreshdeskImportRun,
@@ -286,6 +289,12 @@ export const emailOutboxAdminApi = {
     api.get<EmailOutboxHealth>('/servicedesk/admin/email-health').then(r => r.data),
   retry: (id: string) =>
     api.post<EmailOutboxRetryResponse>(`/servicedesk/admin/email-outbox/${id}/retry`).then(r => r.data),
+};
+
+export const emailSettingsAdminApi = {
+  get: () => api.get<EmailSettingsAdmin>('/servicedesk/admin/email-settings').then(r => r.data),
+  update: (data: UpdateEmailSettingsInput) => api.patch<EmailSettingsAdmin>('/servicedesk/admin/email-settings', data).then(r => r.data),
+  test: (target: 'IMAP' | 'SMTP' | 'BOTH' = 'BOTH') => api.post<EmailConnectionTest>('/servicedesk/admin/email-settings/test', { target }).then(r => r.data),
 };
 
 export const freshdeskImportAdminApi = {

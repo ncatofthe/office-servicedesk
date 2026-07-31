@@ -6,6 +6,7 @@ const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
 const prisma = require('../prisma/prisma.js');
 const productSettingsService = require('./product-settings.service.js');
+const emailSettingsService = require('./email-settings.service.js');
 const taskService = require('./task.service.js');
 const { uploadsDir } = require('../middlewares/upload.middleware.js');
 const { buildStoredAttachmentPath } = require('../utils/attachment.utils.js');
@@ -22,23 +23,13 @@ const parseIntegerEnv = (name, fallback, min = 0) => {
     return Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
 };
 
-const getEmailIntakeConfig = () => ({
-    enabled: toBoolean(process.env.EMAIL_INTAKE_ENABLED),
-    host: process.env.EMAIL_IMAP_HOST || 'imap.yandex.ru',
-    port: parseIntegerEnv('EMAIL_IMAP_PORT', 993, 1),
-    secure: process.env.EMAIL_IMAP_SECURE === undefined ? true : toBoolean(process.env.EMAIL_IMAP_SECURE),
-    user: process.env.EMAIL_IMAP_USER,
-    password: process.env.EMAIL_IMAP_PASSWORD,
-    mailbox: process.env.EMAIL_INTAKE_MAILBOX || 'INBOX',
-    startUid: parseIntegerEnv('EMAIL_INTAKE_START_UID', 1, 1),
-    maxMessages: parseIntegerEnv('EMAIL_INTAKE_MAX_MESSAGES', 30, 1),
-    pollIntervalMs: parseIntegerEnv('EMAIL_INTAKE_POLL_INTERVAL_MS', 300000, 60000),
-    attachmentMaxBytes: parseIntegerEnv('EMAIL_ATTACHMENT_MAX_BYTES', 25 * 1024 * 1024, 1),
-    defaultFolderId: process.env.EMAIL_DEFAULT_FOLDER_ID || undefined,
-    defaultEntityId: process.env.EMAIL_DEFAULT_ENTITY_ID || undefined,
-    defaultTypeId: process.env.EMAIL_DEFAULT_TYPE_ID || undefined,
-    defaultSubtypeId: process.env.EMAIL_DEFAULT_SUBTYPE_ID || undefined
-});
+const getEmailIntakeConfig = () => {
+    const s = emailSettingsService.getRuntimeEmailSettings();
+    return { enabled: s.intakeEnabled, host: s.imapHost, port: s.imapPort, secure: s.imapSecure, user: s.imapUser,
+        password: s.imapPassword, mailbox: s.mailbox, startUid: s.intakeStartUid, maxMessages: s.intakeMaxMessages,
+        pollIntervalMs: s.intakePollIntervalMs, attachmentMaxBytes: s.attachmentMaxBytes, defaultFolderId: s.defaultFolderId || undefined,
+        defaultEntityId: s.defaultEntityId || undefined, defaultTypeId: s.defaultTypeId || undefined, defaultSubtypeId: s.defaultSubtypeId || undefined };
+};
 
 const requireImapConfig = (config) => {
     if (!config.user || !config.password) {
@@ -260,6 +251,13 @@ const processParsedEmailMessage = async(parsed, context = {}) => {
     const sender = getFirstAddress(parsed.from);
     if (!sender || !sender.email) {
         throw new Error('Email message has no sender address.');
+    }
+
+    const ownAddresses = [config.user, emailSettingsService.getRuntimeEmailSettings().fromAddress]
+        .map(normalizeEmail).filter(Boolean);
+    const autoSubmitted = String(parsed.headers?.get?.('auto-submitted') || '').toLowerCase();
+    if (ownAddresses.includes(sender.email) || parsed.headers?.has?.('x-servicedesk-notification') || (autoSubmitted && autoSubmitted !== 'no')) {
+        return { skipped: true, reason: 'automatic_or_self_message', messageId: buildMessageId(parsed, context), taskId: null };
     }
 
     const messageId = buildMessageId(parsed, context);

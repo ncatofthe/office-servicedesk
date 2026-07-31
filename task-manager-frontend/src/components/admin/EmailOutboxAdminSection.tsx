@@ -5,6 +5,7 @@ import { Card } from '../ui/Card';
 import { DataState } from '../ui/DataState';
 import { formatDateTime } from '../../utils';
 import type { EmailOutboxHealth, EmailOutboxItem, EmailOutboxQuery, EmailOutboxStatus } from '../../types';
+import { EmailSettingsAdminSection } from './EmailSettingsAdminSection';
 
 const ALLOWED_LIMITS = [25, 50, 100] as const;
 const RETRYABLE_STATUSES = new Set<EmailOutboxStatus>(['FAILED', 'RETRY_PENDING']);
@@ -300,6 +301,7 @@ export const EmailOutboxAdminSection: React.FC = () => {
 
   return (
     <div className="space-y-4" data-testid="admin-email-outbox">
+      <EmailSettingsAdminSection />
       <div>
         <p className="text-sm font-semibold text-[#1f1f1f]">Почта и очередь отправки</p>
         <p className="mt-1 text-xs text-[#8a8a8a]">Исходящие ответы, ошибки доставки и безопасный повтор отправки.</p>

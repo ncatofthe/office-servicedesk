@@ -318,6 +318,57 @@ model ProductSettings {
   @@map("product_settings")
 }
 
+model EmailSettings {
+  id                       String   @id @default("default")
+  intakeEnabled            Boolean  @default(false)
+  imapHost                 String   @default("imap.yandex.ru")
+  imapPort                 Int      @default(993)
+  imapSecure               Boolean  @default(true)
+  imapUser                 String?
+  imapPasswordEncrypted    String?
+  mailbox                  String   @default("INBOX")
+  intakeStartUid           Int      @default(1)
+  intakeMaxMessages        Int      @default(30)
+  intakePollIntervalMs     Int      @default(300000)
+  attachmentMaxBytes       Int      @default(26214400)
+  defaultFolderId          String?
+  defaultEntityId          String?
+  defaultTypeId            String?
+  defaultSubtypeId         String?
+  outboundEnabled          Boolean  @default(false)
+  smtpHost                 String   @default("smtp.yandex.ru")
+  smtpPort                 Int      @default(465)
+  smtpSecure               Boolean  @default(true)
+  smtpUser                 String?
+  smtpPasswordEncrypted    String?
+  fromAddress              String?
+  fromName                 String   @default("Office ServiceDesk")
+  workerEnabled            Boolean  @default(true)
+  workerIntervalMs         Int      @default(60000)
+  workerBatchSize          Int      @default(20)
+  lockTtlMs                Int      @default(300000)
+  maxAttempts              Int      @default(5)
+  retryDelayMinutes        Int      @default(15)
+  notificationsEnabled     Boolean  @default(true)
+  notifyRequesterCreated   Boolean  @default(true)
+  notifyRequesterComment   Boolean  @default(true)
+  notifyRequesterStatus    Boolean  @default(true)
+  notifyRequesterAssigned  Boolean  @default(false)
+  portalBaseUrl            String?
+  createdSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
+  createdBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
+  commentSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Новый ответ: {{title}}")
+  commentBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} появился новый ответ.\n\n{{comment}}\n\n{{portalLink}}")
+  statusSubjectTemplate    String   @default("[Заявка #{{ticketNumber}}] Статус изменён: {{status}}")
+  statusBodyTemplate       String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
+  assignedSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
+  assignedBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@map("email_settings")
+}
+
 model TicketEntity {
   id          String       @id @default(cuid())
   name        String       @unique

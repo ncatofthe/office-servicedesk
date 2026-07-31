@@ -616,6 +616,21 @@ export interface EmailOutboxHealth {
   maskedFromEmail?: string | null;
 }
 
+export interface EmailSettingsAdmin {
+  id: string; intakeEnabled: boolean; imapHost: string; imapPort: number; imapSecure: boolean; imapUser?: string | null;
+  imapPasswordConfigured: boolean; mailbox: string; intakeStartUid: number; intakeMaxMessages: number; intakePollIntervalMs: number;
+  attachmentMaxBytes: number; defaultFolderId?: string | null; defaultEntityId?: string | null; defaultTypeId?: string | null; defaultSubtypeId?: string | null;
+  outboundEnabled: boolean; smtpHost: string; smtpPort: number; smtpSecure: boolean; smtpUser?: string | null; smtpPasswordConfigured: boolean;
+  fromAddress?: string | null; fromName: string; workerEnabled: boolean; workerIntervalMs: number; workerBatchSize: number; lockTtlMs: number;
+  maxAttempts: number; retryDelayMinutes: number; notificationsEnabled: boolean; notifyRequesterCreated: boolean; notifyRequesterComment: boolean;
+  notifyRequesterStatus: boolean; notifyRequesterAssigned: boolean; portalBaseUrl?: string | null;
+  createdSubjectTemplate: string; createdBodyTemplate: string; commentSubjectTemplate: string; commentBodyTemplate: string;
+  statusSubjectTemplate: string; statusBodyTemplate: string; assignedSubjectTemplate: string; assignedBodyTemplate: string;
+}
+
+export type UpdateEmailSettingsInput = Partial<EmailSettingsAdmin> & { imapPassword?: string; smtpPassword?: string; clearImapPassword?: boolean; clearSmtpPassword?: boolean };
+export interface EmailConnectionTest { imap?: { ok: boolean; message: string }; smtp?: { ok: boolean; message: string } }
+
 export type TaskMergeMode = 'LINK' | 'UNION';
 
 export interface TaskMergeReference {
