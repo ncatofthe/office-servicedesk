@@ -16,8 +16,9 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { chatsApi, notificationsApi } from '../api';
 import type { Notification } from '../types';
+import { UserAvatar } from './ui/UserAvatar';
 import { APP_NAV_ITEMS, canAccessModule, canCreateTasks, isModuleFeatureEnabled } from '../access';
-import { formatDateTime, getInitials } from '../utils';
+import { formatDateTime } from '../utils';
 import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
 
 const notificationTypeLabels: Record<string, string> = {
@@ -581,11 +582,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-[#ececea] text-xs font-semibold text-[#353535] ring-1 ring-[#ddddda] transition hover:ring-[#bfbfbb]"
                   aria-label="Открыть профиль"
                 >
-                  {avatarDataUrl ? (
-                    <img src={avatarDataUrl} alt={user?.name || 'Профиль'} className="h-full w-full object-cover" />
-                  ) : (
-                    getInitials(user?.name || 'User')
-                  )}
+                  <UserAvatar
+                    name={user?.name}
+                    avatar={avatarDataUrl}
+                    className="h-full w-full bg-[#ececea] text-[#505050]"
+                  />
                 </button>
 
                 {profileMenuOpen && (

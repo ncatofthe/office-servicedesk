@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { UserAvatar } from '../components/ui/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { usersApi } from '../api';
-import { getInitials, getRoleLabel } from '../utils';
+import { getRoleLabel } from '../utils';
 import { getProfileExtras, saveProfileExtras } from '../utils/profile-extras';
 import { prepareAvatarImage } from '../utils/avatar';
 
@@ -174,13 +175,11 @@ export const ProfilePage: React.FC = () => {
 
       <Card padding="lg" className="space-y-6">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[24px] border border-[#dddddd] bg-[#f3f3f3] text-2xl font-semibold text-[#2f2f2f]">
-            {avatarDataUrl ? (
-              <img src={avatarDataUrl} alt={user.name} className="h-full w-full object-cover" />
-            ) : (
-              getInitials(user.name)
-            )}
-          </div>
+          <UserAvatar
+            name={user.name}
+            avatar={avatarDataUrl}
+            className="h-24 w-24 border border-[#dddddd] bg-[#f3f3f3] text-[#626262]"
+          />
 
           <div className="flex-1">
             <h2 className="text-2xl font-semibold text-[#1f1f1f]">{user.name}</h2>

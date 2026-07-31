@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { UserCard } from '../components/ui/UserCard';
+import { UserAvatar } from '../components/ui/UserAvatar';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
 import { Tabs } from '../components/ui/Tabs';
@@ -8,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { authApi, departmentsApi, usersApi } from '../api';
 import type { AdminRegisterRequest, DepartmentSummary, ManagedDepartment, TeamUser, UserRole } from '../types';
 import { getRoleLabel } from '../utils';
+import { prepareAvatarImage } from '../utils/avatar';
 import { Eye, EyeOff, Sparkles } from 'lucide-react';
 
 type ManagedRole = 'ADMIN' | 'AGENT' | 'REQUESTER';
@@ -194,6 +196,8 @@ export const TeamPage: React.FC = () => {
   const [departmentDraft, setDepartmentDraft] = useState('');
   const [positionDraft, setPositionDraft] = useState('');
   const [skillsDraft, setSkillsDraft] = useState('');
+  const [avatarDraft, setAvatarDraft] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [actionError, setActionError] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
   const [pageMessage, setPageMessage] = useState('');
@@ -318,6 +322,7 @@ export const TeamPage: React.FC = () => {
       setDepartmentDraft('');
       setPositionDraft('');
       setSkillsDraft('');
+      setAvatarDraft(null);
       return;
     }
 
@@ -327,6 +332,7 @@ export const TeamPage: React.FC = () => {
     setDepartmentDraft(getEditableDepartmentValue(selectedUser));
     setPositionDraft(selectedUser.position || '');
     setSkillsDraft(Array.isArray(selectedUser.skills) ? selectedUser.skills.join(', ') : '');
+    setAvatarDraft(selectedUser.avatar || null);
     setActionError('');
     setActionSuccess('');
   }, [selectedUser]);
@@ -373,7 +379,7 @@ export const TeamPage: React.FC = () => {
   const isDepartmentActionPending = Boolean(departmentActionId) || isCreatingDepartment;
 
   const handleCloseModal = () => {
-    if (isSavingRole || isSavingStatus || isSavingPassword || isDeleting) {
+    if (isSavingProfile || isSavingRole || isSavingStatus || isSavingPassword || isDeleting) {
       return;
     }
 
@@ -489,6 +495,7 @@ export const TeamPage: React.FC = () => {
         department: departmentDraft.trim() ? departmentDraft.trim() : null,
         position: positionDraft.trim() ? positionDraft.trim() : null,
         skills: parseSkillsDraft(skillsDraft),
+        avatar: avatarDraft,
       });
 
       const [, refreshedUser] = await Promise.all([
@@ -497,11 +504,28 @@ export const TeamPage: React.FC = () => {
       ]);
 
       setSelectedUser((current) => (current ? { ...current, ...refreshedUser } : current));
+      setAvatarDraft(refreshedUser.avatar || null);
       setActionSuccess('Данные сотрудника обновлены.');
     } catch (error) {
       setActionError(getApiErrorMessage(error, 'Не удалось сохранить данные сотрудника.'));
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleEmployeeAvatarUpload = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+
+    setActionError('');
+    setActionSuccess('');
+    try {
+      setAvatarDraft(await prepareAvatarImage(file));
+      setActionSuccess('Фотография подготовлена. Нажмите «Сохранить», чтобы применить её во всём приложении.');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Не удалось обработать фотографию сотрудника.');
+    } finally {
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
     }
   };
 
@@ -1232,7 +1256,46 @@ export const TeamPage: React.FC = () => {
                 <div className="mt-4 rounded-[12px] border border-[#e6e6e6] bg-white p-4">
                   <div className="flex flex-col gap-1">
                     <p className="text-sm font-semibold text-[#1f1f1f]">Данные сотрудника</p>
-                    <p className="text-xs text-[#8a8a8a]">Измените контактные данные, отдел, должность и навыки сотрудника.</p>
+                    <p className="text-xs text-[#8a8a8a]">Измените фотографию, контактные данные, отдел, должность и навыки сотрудника.</p>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-3 rounded-[12px] border border-[#e6e6e6] bg-[#fafafa] p-3 sm:flex-row sm:items-center">
+                    <UserAvatar
+                      name={nameDraft || selectedUser.name}
+                      avatar={avatarDraft}
+                      className="h-16 w-16 border border-[#dddddd] bg-[#e9ecef] text-[#59636f]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#2b2b2b]">Фотография сотрудника</p>
+                      <p className="mt-1 text-xs leading-5 text-[#777]">JPG, PNG или WebP. После сохранения фотография появится в чатах, заявках, списках и на главной.</p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <input
+                        ref={avatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(event) => void handleEmployeeAvatarUpload(event.target.files)}
+                      />
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={() => avatarInputRef.current?.click()}
+                        disabled={isSavingProfile || isSavingRole || isSavingStatus || isDeleting}
+                      >
+                        {avatarDraft ? 'Заменить фото' : 'Загрузить фото'}
+                      </button>
+                      {avatarDraft && (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => setAvatarDraft(null)}
+                          disabled={isSavingProfile || isSavingRole || isSavingStatus || isDeleting}
+                        >
+                          Удалить фото
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">

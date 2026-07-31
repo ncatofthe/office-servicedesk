@@ -658,8 +658,9 @@ export const TasksPage: React.FC = () => {
     const nextStatus = taskStatusOptions.some((option) => option.value === preferredStatus)
       ? preferredStatus
       : taskStatusOptions[0]?.value;
-    const hasAssignees = Boolean(task.assignees?.length);
-    const requiresCoordinatedClose = nextStatus === 'DONE' && (task.assignees?.length || 0) > 1;
+    const assigneeCount = Math.max(task.assignees?.length || 0, task._count?.assignees || 0);
+    const hasAssignees = assigneeCount > 0;
+    const requiresCoordinatedClose = nextStatus === 'DONE' && assigneeCount > 1;
     const isAssignedToAnotherAgent = Boolean(user?.role === 'AGENT' && hasAssignees && !isMyTask(task));
     const canAssignSelf = Boolean(user && (user.role === 'ADMIN' || user.role === 'AGENT') && !hasAssignees);
 

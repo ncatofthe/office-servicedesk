@@ -24,7 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
 import { UserAvatar } from '../components/ui/UserAvatar';
-import { formatDateTime, getInitials } from '../utils';
+import { formatDateTime } from '../utils';
 import { prepareAvatarImage } from '../utils/avatar';
 import type {
   ChatAttachment,
@@ -837,7 +837,7 @@ export const ChatsPage: React.FC = () => {
                                   : 'bg-white/15 text-white'
                             }`}>
                               {!isTicket && item.chat.kind === 'DIRECT'
-                                ? getInitials(getDirectPeer(item.chat, user?.id)?.name || title)
+                                ? <UserRound size={18} strokeWidth={1.8} />
                                 : <Icon size={18} />}
                             </div>
                           )}
@@ -891,7 +891,7 @@ export const ChatsPage: React.FC = () => {
                   ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8ecf1] text-xs font-semibold text-[#2d3c54]">
                       {selectedChat?.kind === 'DIRECT'
-                        ? getInitials(getDirectPeer(selectedChat, user?.id)?.name || currentTitle)
+                        ? <UserRound size={17} strokeWidth={1.8} />
                         : selectedTicket
                           ? <Ticket size={17} />
                           : selectedChat?.kind === 'DEPARTMENT'

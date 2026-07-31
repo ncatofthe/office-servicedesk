@@ -1,5 +1,5 @@
 import React from 'react';
-import { getInitials } from '../../utils';
+import { UserRound } from 'lucide-react';
 
 interface UserAvatarProps {
   name?: string | null;
@@ -21,7 +21,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
     {avatar ? (
       <img src={avatar} alt={name || 'Аватар'} className={imageClassName} />
     ) : (
-      getInitials(name || 'Пользователь')
+      <UserRound className="h-[52%] w-[52%]" strokeWidth={1.8} aria-hidden="true" />
     )}
   </div>
 );
