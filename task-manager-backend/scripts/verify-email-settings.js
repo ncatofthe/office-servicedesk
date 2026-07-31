@@ -10,8 +10,10 @@ settingsService.loadEmailSettings()
         const settings = result.settings;
         console.log(JSON.stringify({
             intakeEnabled: settings.intakeEnabled,
+            intakePollIntervalMs: settings.intakePollIntervalMs,
             outboundEnabled: settings.outboundEnabled,
             workerEnabled: settings.workerEnabled,
+            workerIntervalMs: settings.workerIntervalMs,
             notificationsEnabled: settings.notificationsEnabled,
             notificationEvents: {
                 created: settings.notifyRequesterCreated,
