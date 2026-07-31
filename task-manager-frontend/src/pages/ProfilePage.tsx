@@ -33,6 +33,7 @@ export const ProfilePage: React.FC = () => {
   const [name, setName] = useState(user?.name || '');
   const [about, setAbout] = useState('');
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | undefined>();
+  const [avatarSaving, setAvatarSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
   const [error, setError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -129,14 +130,38 @@ export const ProfilePage: React.FC = () => {
     }
 
     setError('');
+    setSaveMessage('');
+    setAvatarSaving(true);
     try {
       const nextAvatarDataUrl = await prepareAvatarImage(file);
+      await usersApi.updateProfile(user.id, { avatar: nextAvatarDataUrl });
       setAvatarDataUrl(nextAvatarDataUrl);
-      setSaveMessage('Нажмите «Сохранить», чтобы применить новый аватар.');
+      saveProfileExtras(user.id, { about, avatarDataUrl: nextAvatarDataUrl });
+      await refreshUser();
+      setSaveMessage('Аватар обновлён и уже виден коллегам.');
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : 'Не удалось обработать изображение.');
     } finally {
+      setAvatarSaving(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarSaving(true);
+    setError('');
+    setSaveMessage('');
+    try {
+      await usersApi.updateProfile(user.id, { avatar: null });
+      setAvatarDataUrl(undefined);
+      saveProfileExtras(user.id, { about, avatarDataUrl: undefined });
+      await refreshUser();
+      setSaveMessage('Аватар удалён.');
+    } catch (removeError: unknown) {
+      const apiError = removeError as { response?: { data?: { error?: string; message?: string } } };
+      setError(apiError.response?.data?.error || apiError.response?.data?.message || 'Не удалось удалить аватар.');
+    } finally {
+      setAvatarSaving(false);
     }
   };
 
@@ -178,11 +203,11 @@ export const ProfilePage: React.FC = () => {
               className="hidden"
               onChange={(event) => handleAvatarUpload(event.target.files)}
             />
-            <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
-              Загрузить аватар
+            <button type="button" className="btn" onClick={() => fileInputRef.current?.click()} disabled={avatarSaving}>
+              {avatarSaving ? 'Сохраняем...' : 'Загрузить аватар'}
             </button>
             {avatarDataUrl && (
-              <button type="button" className="btn" onClick={() => { setAvatarDataUrl(undefined); setSaveMessage('Нажмите «Сохранить», чтобы удалить аватар.'); }}>
+              <button type="button" className="btn" onClick={() => void handleAvatarRemove()} disabled={avatarSaving}>
                 Удалить аватар
               </button>
             )}

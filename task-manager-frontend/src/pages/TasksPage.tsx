@@ -26,16 +26,14 @@ import type {
 import { canCreateTasks, hasCapability } from '../access';
 import { TaskDetailsModal } from '../components/TaskDetailsModal';
 import { DataState } from '../components/ui/DataState';
-import { TASK_STATUS_OPTIONS, formatDateTime, getAvailableTaskStatusOptions, getRoleLabel, getStatusColor, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
+import { AssigneeCheckboxList } from '../components/ui/AssigneeCheckboxList';
+import { TASK_STATUS_OPTIONS, formatDateTime, getAvailableTaskStatusOptions, getStatusColor, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { useSearchParams } from 'react-router-dom';
 
 type QuickScope = 'all' | 'mine';
 type SortKey = 'updated' | 'created' | 'priority';
 type UpdateWindow = 'all' | '24h' | '7d' | '30d';
-
-const getSelectedValues = (select: HTMLSelectElement) =>
-  Array.from(select.selectedOptions).map((option) => option.value);
 
 const getApiErrorMessage = (error: unknown, fallback: string) => {
   if (typeof error !== 'object' || error === null) {
@@ -613,6 +611,23 @@ export const TasksPage: React.FC = () => {
     }
   };
 
+  const approveCloseFromList = async (task: TaskSummary) => {
+    setRowActionId(`status-${task.id}`);
+    setSuccessMessage('');
+    setActionError('');
+    try {
+      const response = await tasksApi.confirmClose(task.id);
+      await refreshInbox();
+      setSuccessMessage(response.closed
+        ? `${getTaskDisplayNumber(task)} закрыта после согласования всех исполнителей.`
+        : `Ваше согласование закрытия ${getTaskDisplayNumber(task)} сохранено.`);
+    } catch (error) {
+      setActionError(getActionErrorMessage(error, `Не удалось согласовать закрытие ${getTaskDisplayNumber(task)}.`));
+    } finally {
+      setRowActionId('');
+    }
+  };
+
   const isMyTask = (task: TaskSummary) => Boolean(user && task.assignees?.some((assignee) => assignee.userId === user.id));
 
   const renderRowAction = (task: TaskSummary) => {
@@ -633,8 +648,18 @@ export const TasksPage: React.FC = () => {
       isAssignee: isMyTask(task),
       isAuthor: user?.id === task.author.id,
     });
-    const nextStatus = taskStatusOptions[0]?.value;
+    const preferredStatus: TaskStatus | undefined = task.status === 'NEW'
+      ? 'IN_PROGRESS'
+      : ['IN_PROGRESS', 'REVIEW', 'REWORK'].includes(task.status)
+        ? 'DONE'
+        : task.status === 'POSTPONED'
+          ? 'IN_PROGRESS'
+          : undefined;
+    const nextStatus = taskStatusOptions.some((option) => option.value === preferredStatus)
+      ? preferredStatus
+      : taskStatusOptions[0]?.value;
     const hasAssignees = Boolean(task.assignees?.length);
+    const requiresCoordinatedClose = nextStatus === 'DONE' && (task.assignees?.length || 0) > 1;
     const isAssignedToAnotherAgent = Boolean(user?.role === 'AGENT' && hasAssignees && !isMyTask(task));
     const canAssignSelf = Boolean(user && (user.role === 'ADMIN' || user.role === 'AGENT') && !hasAssignees);
 
@@ -655,11 +680,19 @@ export const TasksPage: React.FC = () => {
           <button
             type="button"
             className="btn xl:w-full"
-            onClick={() => void moveForward(task, nextStatus)}
+            onClick={() => void (requiresCoordinatedClose ? approveCloseFromList(task) : moveForward(task, nextStatus))}
             disabled={Boolean(rowActionId)}
             data-testid="task-quick-status"
           >
-            {rowActionId === `status-${task.id}` ? 'Обновляем...' : nextStatus === 'IN_PROGRESS' ? 'Перевести в работу' : 'Закрыть'}
+            {rowActionId === `status-${task.id}`
+              ? (requiresCoordinatedClose ? 'Согласовываем...' : 'Обновляем...')
+              : nextStatus === 'IN_PROGRESS'
+                ? 'Перевести в работу'
+                : requiresCoordinatedClose
+                  ? 'Согласовать закрытие'
+                  : nextStatus === 'DONE'
+                    ? 'Закрыть'
+                    : `Статус: ${getStatusLabel(nextStatus)}`}
           </button>
         )}
         {isAssignedToAnotherAgent && (
@@ -1151,19 +1184,11 @@ export const TasksPage: React.FC = () => {
                 ))}
               </select>
             </div>
-            {canReadUsers && (
+            {user?.role === 'ADMIN' && (
               <div>
-                <label className="text-sm text-[#5f5f5f]">Исполнители</label>
-                <select
-                  multiple
-                  className="input mt-1 h-24"
-                  value={assignees}
-                  onChange={(event) => setAssignees(getSelectedValues(event.target))}
-                >
-                  {assignableUsers.map((teamUser) => (
-                    <option key={teamUser.id} value={teamUser.id}>{teamUser.name} · {getRoleLabel(teamUser.role)}</option>
-                  ))}
-                </select>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Исполнители</label>
+                <p className="mb-2 text-xs text-[#8a8a8a]">Поставьте галочку возле каждого нужного исполнителя.</p>
+                <AssigneeCheckboxList users={assignableUsers} selectedIds={assignees} onChange={setAssignees} disabled={isSaving} />
               </div>
             )}
           </div>

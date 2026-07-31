@@ -10,6 +10,7 @@ import { canCreateTasks, getModuleVisibility } from '../access';
 import { filesApi, serviceDeskFoldersApi } from '../api';
 import { TaskDetailsModal } from '../components/TaskDetailsModal';
 import { DataState } from '../components/ui/DataState';
+import { AssigneeCheckboxList } from '../components/ui/AssigneeCheckboxList';
 import type { ServiceDeskFolder } from '../types';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { TASK_BOARD_COLUMNS, TASK_CREATION_STATUS_OPTIONS, normalizeWorkflowStatus } from '../utils';
@@ -328,20 +329,9 @@ export const KanbanPage: React.FC = () => {
               </div>
             )}
             {user?.role === 'ADMIN' && <div>
-              <label className="text-sm text-[#5f5f5f]">Исполнители</label>
-              <select
-                multiple
-                className="input mt-1 h-20"
-                value={assignees}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions).map((o) => o.value);
-                  setAssignees(selected);
-                }}
-              >
-                {users.map((u) => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+              <label className="mb-1 block text-sm text-[#5f5f5f]">Исполнители</label>
+              <p className="mb-2 text-xs text-[#8a8a8a]">Отметьте одного или нескольких сотрудников.</p>
+              <AssigneeCheckboxList users={users} selectedIds={assignees} onChange={setAssignees} disabled={saving} />
             </div>}
           </div>
           <div

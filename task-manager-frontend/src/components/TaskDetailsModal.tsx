@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, UserPlus, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, X } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { UserAvatar } from './ui/UserAvatar';
+import { AssigneeCheckboxList } from './ui/AssigneeCheckboxList';
 import { CannedReplyPicker } from './canned-replies/CannedReplyPicker';
 import { tasksApi, commentsApi, filesApi, knowledgeApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
@@ -486,7 +487,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [editingCommentText, setEditingCommentText] = useState('');
   const [taskSaving, setTaskSaving] = useState(false);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
-  const [assigneeToAdd, setAssigneeToAdd] = useState('');
   const [taskDeleting, setTaskDeleting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -528,9 +528,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [dueDateDraft, setDueDateDraft] = useState('');
   const [folderIdDraft, setFolderIdDraft] = useState('');
   const [requesterCloseRequiredDraft, setRequesterCloseRequiredDraft] = useState(false);
-  const unassignedEditableUsers = task
-    ? assignableEditableUsers.filter((editableUser) => !task.assignees.some((assignee) => assignee.userId === editableUser.id))
-    : [];
 
   const mergedDepartmentOptions = task?.folder?.id && task.folder.name && !departmentOptions.some((folder) => folder.id === task.folder?.id)
     ? [
@@ -866,33 +863,26 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }
   };
 
-  const addTaskAssignee = async () => {
-    if (!taskId || !assigneeToAdd || !isAdmin || assignmentSaving) return;
-    setAssignmentSaving(true);
-    setError('');
-    setSuccessMessage('');
-    try {
-      await tasksApi.addAssignee(taskId, assigneeToAdd);
-      setAssigneeToAdd('');
-      await refreshTaskAndMergeInfo('Исполнитель добавлен. Согласование закрытия начнётся заново.');
-    } catch (actionError) {
-      setError(getApiErrorMessage(actionError, 'Не удалось добавить исполнителя.'));
-    } finally {
-      setAssignmentSaving(false);
-    }
-  };
+  const updateTaskAssignees = async (nextIds: string[]) => {
+    if (!taskId || !task || !isAdmin || assignmentSaving) return;
+    const currentIds = task.assignees.map((assignee) => assignee.userId);
+    const addedId = nextIds.find((id) => !currentIds.includes(id));
+    const removedId = currentIds.find((id) => !nextIds.includes(id));
+    if (!addedId && !removedId) return;
 
-  const removeTaskAssignee = async (userId: string, name: string) => {
-    if (!taskId || !isAdmin || assignmentSaving) return;
-    if (!window.confirm(`Снять исполнителя «${name}» с заявки? Текущие подтверждения закрытия будут сброшены.`)) return;
     setAssignmentSaving(true);
     setError('');
     setSuccessMessage('');
     try {
-      await tasksApi.removeAssignee(taskId, userId);
-      await refreshTaskAndMergeInfo('Исполнитель снят с заявки.');
+      if (addedId) {
+        await tasksApi.addAssignee(taskId, addedId);
+        await refreshTaskAndMergeInfo('Исполнитель добавлен. Согласование закрытия начнётся заново.');
+      } else if (removedId) {
+        await tasksApi.removeAssignee(taskId, removedId);
+        await refreshTaskAndMergeInfo('Исполнитель снят с заявки.');
+      }
     } catch (actionError) {
-      setError(getApiErrorMessage(actionError, 'Не удалось снять исполнителя.'));
+      setError(getApiErrorMessage(actionError, 'Не удалось изменить состав исполнителей.'));
     } finally {
       setAssignmentSaving(false);
     }
@@ -1199,51 +1189,25 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       <p className="text-xs font-semibold text-[#3f4752]">Исполнители</p>
                       <span className="text-[10px] text-[#8b929a]">{task.assignees.length}</span>
                     </div>
-                    <div className="mt-2 space-y-2">
-                      {task.assignees.length > 0 ? task.assignees.map((assignee) => (
-                        <div key={assignee.userId} className="flex items-center gap-2 rounded-[9px] bg-[#f5f6f7] px-2 py-1.5">
-                          <UserAvatar name={assignee.user.name} avatar={assignee.user.avatar} className="h-7 w-7 bg-[#2d3c54] text-[9px] text-white" />
-                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#3b4149]">{assignee.user.name}</span>
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              className="grid h-7 w-7 place-items-center rounded-[7px] text-[#9a4a4a] hover:bg-[#ffeaea]"
-                              onClick={() => void removeTaskAssignee(assignee.userId, assignee.user.name)}
-                              disabled={assignmentSaving}
-                              title="Снять исполнителя"
-                              aria-label={`Снять исполнителя ${assignee.user.name}`}
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-                      )) : (
-                        <p className="text-xs text-[#8a8f96]">Исполнитель пока не назначен.</p>
-                      )}
-                    </div>
                     {isAdmin && (
-                      <div className="mt-2 flex gap-2">
-                        <select
-                          className="input h-9 min-w-0 flex-1 py-1 text-xs"
-                          value={assigneeToAdd}
-                          onChange={(event) => setAssigneeToAdd(event.target.value)}
-                          disabled={assignmentSaving || unassignedEditableUsers.length === 0}
-                          aria-label="Добавить исполнителя"
-                        >
-                          <option value="">{unassignedEditableUsers.length > 0 ? 'Добавить исполнителя…' : 'Все назначены'}</option>
-                          {unassignedEditableUsers.map((editableUser) => (
-                            <option key={editableUser.id} value={editableUser.id}>{editableUser.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="btn btn-primary grid h-9 w-9 shrink-0 place-items-center p-0"
-                          onClick={() => void addTaskAssignee()}
-                          disabled={!assigneeToAdd || assignmentSaving}
-                          title="Добавить исполнителя"
-                        >
-                          {assignmentSaving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                        </button>
+                      <div className="mt-2">
+                        <p className="mb-2 text-[10px] leading-4 text-[#7d848d]">Поставьте или снимите галочку. Изменение применяется сразу.</p>
+                        <AssigneeCheckboxList
+                          users={assignableEditableUsers}
+                          selectedIds={task.assignees.map((assignee) => assignee.userId)}
+                          onChange={(nextIds) => void updateTaskAssignees(nextIds)}
+                          disabled={assignmentSaving}
+                        />
+                      </div>
+                    )}
+                    {!isAdmin && (
+                      <div className="mt-2 space-y-2">
+                        {task.assignees.length > 0 ? task.assignees.map((assignee) => (
+                          <div key={assignee.userId} className="flex items-center gap-2 rounded-[9px] bg-[#f5f6f7] px-2 py-1.5">
+                            <UserAvatar name={assignee.user.name} avatar={assignee.user.avatar} className="h-7 w-7 bg-[#2d3c54] text-[9px] text-white" />
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#3b4149]">{assignee.user.name}</span>
+                          </div>
+                        )) : <p className="text-xs text-[#8a8f96]">Исполнитель пока не назначен.</p>}
                       </div>
                     )}
                     {task.assignees.length > 1 && (
