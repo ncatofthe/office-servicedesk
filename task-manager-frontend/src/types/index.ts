@@ -116,7 +116,7 @@ export interface ManagedDepartment extends DepartmentSummary {
   membershipCount: number;
   taskCount: number;
   legacyUserCount: number;
-  members?: Array<Pick<TeamUser, 'id' | 'name' | 'email' | 'role' | 'isActive'> & { isPrimary?: boolean }>;
+  members?: Array<Pick<TeamUser, 'id' | 'name' | 'email' | 'role' | 'isActive' | 'avatar'> & { isPrimary?: boolean }>;
   canDelete: boolean;
 }
 export interface CreateDepartmentInput {
@@ -128,6 +128,12 @@ export interface UpdateDepartmentInput {
 }
 export interface DeleteDepartmentResponse {
   message: string;
+}
+export interface RemoveDepartmentMemberResponse {
+  message: string;
+  userId: string;
+  departmentId: string;
+  primaryDepartment: string | null;
 }
 
 export type UserCapability =

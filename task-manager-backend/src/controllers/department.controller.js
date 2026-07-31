@@ -5,6 +5,10 @@ const handleDepartmentError = (error, res) => {
         return res.status(404).json({ error: 'Отдел не найден.' });
     }
 
+    if (error.code === 'DEPARTMENT_MEMBER_NOT_FOUND') {
+        return res.status(404).json({ error: 'Сотрудник не найден в этом отделе.' });
+    }
+
     if (error.code === 'DEPARTMENT_INVALID') {
         return res.status(400).json({ error: error.message });
     }
@@ -59,6 +63,18 @@ const updateDepartment = async(req, res) => {
     }
 };
 
+const removeDepartmentMember = async(req, res) => {
+    try {
+        const result = await departmentService.removeDepartmentMember(
+            req.params.id,
+            req.params.userId
+        );
+        res.json(result);
+    } catch (error) {
+        handleDepartmentError(error, res);
+    }
+};
+
 const deleteDepartment = async(req, res) => {
     try {
         const result = await departmentService.deleteDepartment(
@@ -77,5 +93,6 @@ module.exports = {
     getManagedDepartments,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    removeDepartmentMember
 };

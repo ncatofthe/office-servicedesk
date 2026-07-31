@@ -785,6 +785,33 @@ export const TeamPage: React.FC = () => {
     }
   };
 
+  const handleRemoveDepartmentMember = async (
+    department: ManagedDepartment,
+    member: NonNullable<ManagedDepartment['members']>[number]
+  ) => {
+    if (!window.confirm(`Убрать сотрудника «${member.name}» из отдела «${department.name}»? Учётная запись и история заявок сохранятся.`)) {
+      return;
+    }
+
+    setDepartmentActionId(department.id);
+    setDepartmentAdminError('');
+    setDepartmentAdminSuccess('');
+
+    try {
+      const response = await departmentsApi.removeMember(department.id, member.id);
+      await Promise.all([
+        loadAvailableDepartments(),
+        loadManagedDepartments(),
+        fetchUsers(),
+      ]);
+      setDepartmentAdminSuccess(response.message || `Сотрудник «${member.name}» удалён из отдела.`);
+    } catch (error) {
+      setDepartmentAdminError(getApiErrorMessage(error, 'Не удалось убрать сотрудника из отдела.'));
+    } finally {
+      setDepartmentActionId(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -969,21 +996,29 @@ export const TeamPage: React.FC = () => {
                             <p className="mt-2 text-sm text-[#8b6a16]">{getDepartmentUsageSummary(department)}</p>
                           )}
                           {department.members && department.members.length > 0 ? (
-                            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                              {department.members.slice(0, 9).map((member) => (
+                            <div className="mt-3 grid max-h-[420px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+                              {department.members.map((member) => (
                                 <div key={member.id} className="rounded-[10px] border border-[#e6e6e6] bg-white px-3 py-2 text-sm">
-                                  <p className="font-medium text-[#1f1f1f]">{member.name}</p>
-                                  <p className="truncate text-xs text-[#6b6b6b]">{member.email}</p>
-                                  <p className="mt-1 text-xs text-[#8a8a8a]">
-                                    {getRoleLabel(member.role)}{member.isPrimary ? ' · основной отдел' : ''}{member.isActive ? '' : ' · доступ отключён'}
-                                  </p>
+                                  <div className="flex items-start gap-2.5">
+                                    <UserAvatar name={member.name} avatar={member.avatar} className="h-9 w-9 bg-[#eef1f5] text-[#2d3c54]" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-medium text-[#1f1f1f]">{member.name}</p>
+                                      <p className="truncate text-xs text-[#6b6b6b]">{member.email}</p>
+                                      <p className="mt-1 text-xs text-[#8a8a8a]">
+                                        {getRoleLabel(member.role)}{member.isPrimary ? ' · основной отдел' : ''}{member.isActive ? '' : ' · доступ отключён'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="mt-2 w-full rounded-[8px] border border-[#efc1c1] px-2.5 py-1.5 text-xs font-medium text-[#b23b3b] hover:bg-[#fff4f4]"
+                                    onClick={() => handleRemoveDepartmentMember(department, member)}
+                                    disabled={isDepartmentActionPending}
+                                  >
+                                    {isBusy ? 'Убираем...' : 'Убрать из отдела'}
+                                  </button>
                                 </div>
                               ))}
-                              {department.members.length > 9 && (
-                                <div className="rounded-[10px] border border-dashed border-[#d7d7d7] bg-white px-3 py-2 text-sm text-[#6b6b6b]">
-                                  Ещё сотрудников: {department.members.length - 9}
-                                </div>
-                              )}
                             </div>
                           ) : (
                             <p className="mt-3 text-sm text-[#8a8a8a]">В отделе пока нет сотрудников.</p>

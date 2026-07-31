@@ -3,13 +3,14 @@ const { body } = require('express-validator');
 const { MAX_AVATAR_DATA_URL_LENGTH } = require('../utils/avatar.js');
 const authMiddleware = require('../middlewares/auth.middleware.js');
 const roleMiddleware = require('../middlewares/role.middleware.js');
+const { requireFeature } = require('../middlewares/feature.middleware.js');
 const { upload } = require('../middlewares/upload.middleware.js');
 const validate = require('../middlewares/validate.middleware.js');
 const chatController = require('../controllers/chat.controller.js');
 
 const router = express.Router();
 
-router.use(authMiddleware);
+router.use(authMiddleware, requireFeature('chats'));
 
 router.get('/settings', chatController.getSettings);
 router.patch('/admin/settings', roleMiddleware(['ADMIN']), chatController.updateSettings);

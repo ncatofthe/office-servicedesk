@@ -7,6 +7,7 @@ import type {
   CreateSlaPolicyInput,
   CreateDepartmentInput,
   DeleteDepartmentResponse,
+  RemoveDepartmentMemberResponse,
   DepartmentSummary,
   ServiceDeskDictionaryInput,
   ServiceDeskEntity,
@@ -140,6 +141,8 @@ export const departmentsApi = {
     api.post<ManagedDepartment>('/departments', data).then(r => r.data),
   update: (id: string, data: UpdateDepartmentInput) =>
     api.patch<ManagedDepartment>(`/departments/${id}`, data).then(r => r.data),
+  removeMember: (id: string, userId: string) =>
+    api.delete<RemoveDepartmentMemberResponse>(`/departments/${id}/members/${userId}`).then(r => r.data),
   deleteManaged: (id: string, options?: { detach?: boolean }) =>
     api.delete<DeleteDepartmentResponse>(`/departments/${id}`, {
       params: options?.detach ? { mode: 'detach' } : undefined,

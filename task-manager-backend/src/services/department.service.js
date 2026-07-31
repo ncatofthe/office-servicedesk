@@ -25,7 +25,8 @@ const DEPARTMENT_MANAGED_SELECT = {
                     name: true,
                     email: true,
                     role: true,
-                    isActive: true
+                    isActive: true,
+                    avatar: true
                 }
             }
         },
@@ -118,6 +119,7 @@ const mapManagedDepartment = (department, legacyUserCount = 0) => ({
             email: membership.user.email,
             role: membership.user.role,
             isActive: membership.user.isActive,
+            avatar: membership.user.avatar,
             isPrimary: Boolean(membership.isPrimary)
         }))
         : [],
@@ -269,6 +271,92 @@ const updateDepartment = async(id, data, db = prisma) => {
     return mapManagedDepartment(updatedDepartment, legacyUserCount);
 };
 
+const removeDepartmentMember = async(departmentId, userId, db = prisma) => {
+    const [department, user] = await Promise.all([
+        db.department.findUnique({
+            where: { id: departmentId },
+            select: { id: true, name: true, headUserId: true }
+        }),
+        db.user.findUnique({
+            where: { id: userId },
+            select: { id: true, department: true }
+        })
+    ]);
+
+    if (!department) {
+        throw createDepartmentError('Department not found', 'DEPARTMENT_NOT_FOUND');
+    }
+    if (!user) {
+        throw createDepartmentError('User not found', 'DEPARTMENT_MEMBER_NOT_FOUND');
+    }
+
+    const membership = await db.userDepartment.findUnique({
+        where: {
+            userId_departmentId: {
+                userId,
+                departmentId
+            }
+        },
+        select: { id: true, isPrimary: true }
+    });
+    const hasLegacyLink = normalizeDepartmentName(user.department) === normalizeDepartmentName(department.name);
+
+    if (!membership && !hasLegacyLink && department.headUserId !== userId) {
+        throw createDepartmentError('User is not a member of this department', 'DEPARTMENT_MEMBER_NOT_FOUND');
+    }
+
+    const primaryDepartment = await db.$transaction(async(tx) => {
+        if (department.headUserId === userId) {
+            await tx.department.update({
+                where: { id: departmentId },
+                data: { headUserId: null }
+            });
+        }
+
+        if (membership) {
+            await tx.userDepartment.delete({ where: { id: membership.id } });
+        }
+
+        let replacementDepartment = null;
+        if (membership?.isPrimary || hasLegacyLink) {
+            const replacementMembership = await tx.userDepartment.findFirst({
+                where: { userId },
+                orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+                select: {
+                    id: true,
+                    department: { select: { name: true } }
+                }
+            });
+
+            if (replacementMembership) {
+                await tx.userDepartment.updateMany({
+                    where: { userId },
+                    data: { isPrimary: false }
+                });
+                await tx.userDepartment.update({
+                    where: { id: replacementMembership.id },
+                    data: { isPrimary: true }
+                });
+                replacementDepartment = replacementMembership.department.name;
+            }
+
+            await tx.user.update({
+                where: { id: userId },
+                data: { department: replacementDepartment }
+            });
+        }
+
+        return replacementDepartment;
+    });
+
+    return {
+        message: 'Сотрудник удалён из отдела.',
+        userId,
+        departmentId,
+        primaryDepartment
+    };
+};
+
 const deleteDepartment = async(id, db = prisma, options = {}) => {
     const department = await db.department.findUnique({
         where: { id },
@@ -330,5 +418,6 @@ module.exports = {
     getManagedDepartments,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    removeDepartmentMember
 };

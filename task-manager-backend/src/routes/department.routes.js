@@ -8,7 +8,8 @@ const {
     getManagedDepartments,
     createDepartment,
     updateDepartment,
-    deleteDepartment
+    deleteDepartment,
+    removeDepartmentMember
 } = require('../controllers/department.controller.js');
 
 const router = express.Router();
@@ -41,6 +42,15 @@ router.patch(
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
     validate,
     updateDepartment
+);
+router.delete(
+    '/departments/:id/members/:userId',
+    authMiddleware,
+    roleMiddleware(['ADMIN']),
+    param('id').isString().withMessage('Invalid department identifier'),
+    param('userId').isString().withMessage('Invalid user identifier'),
+    validate,
+    removeDepartmentMember
 );
 router.delete(
     '/departments/:id',
