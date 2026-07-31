@@ -12,7 +12,7 @@ interface TaskCardProps {
 }
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
-  const assigneeNames = task.assignees?.map((a) => a.user.name) || [];
+  const assigneePeople = task.assignees?.map((assignee) => assignee.user) || [];
   const displayNumber = task.displayNumber || (typeof task.ticketNumber === 'number' ? `#${task.ticketNumber}` : null);
   const typeSummary = [task.type?.name, task.subtype?.name].filter(Boolean).join(' · ');
   const showProgress = (task.progress || 0) > 0 && task.status !== 'NEW' && task.status !== 'DONE';
@@ -85,8 +85,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
           )}
         </div>
 
-        {assigneeNames.length > 0 ? (
-          <AvatarGroup names={assigneeNames} />
+        {assigneePeople.length > 0 ? (
+          <AvatarGroup people={assigneePeople} />
         ) : (
           <span className="text-xs font-medium text-[#9a9a9a]">Без исполнителя</span>
         )}

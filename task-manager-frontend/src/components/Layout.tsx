@@ -181,7 +181,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const moreMenuRef = useRef<HTMLDetailsElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
-  const [avatarDataUrl, setAvatarDataUrl] = useState<string | undefined>(() => getProfileExtras(user?.id).avatarDataUrl);
+  const [avatarDataUrl, setAvatarDataUrl] = useState<string | undefined>(() => user?.avatar || getProfileExtras(user?.id).avatarDataUrl);
 
   const sortedNotifications = useMemo(
     () => [...notifications].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()),
@@ -234,8 +234,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   }, []);
 
   useEffect(() => {
-    setAvatarDataUrl(getProfileExtras(user?.id).avatarDataUrl);
-  }, [user?.id]);
+    setAvatarDataUrl(user?.avatar || getProfileExtras(user?.id).avatarDataUrl);
+  }, [user?.avatar, user?.id]);
 
   useEffect(() => {
     if (!isFeatureEnabled('notifications')) {
@@ -283,7 +283,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         return;
       }
 
-      setAvatarDataUrl(getProfileExtras(user.id).avatarDataUrl);
+      setAvatarDataUrl(user.avatar || getProfileExtras(user.id).avatarDataUrl);
     };
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -318,7 +318,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [user?.id]);
+  }, [user?.avatar, user?.id]);
 
   useEffect(() => {
     setMoreMenuOpen(false);

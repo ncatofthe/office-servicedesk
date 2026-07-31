@@ -4,16 +4,11 @@ import { ArrowDownRight, ArrowRight, ArrowUpRight, CheckCircle2, Clock, FilePlus
 import { Link } from 'react-router-dom';
 import { dashboardApi, tasksApi } from '../api';
 import { ChartSurface } from '../components/ui/ChartSurface';
+import { UserAvatar } from '../components/ui/UserAvatar';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import type { DashboardData, TaskSummary } from '../types';
 import { getRoleLabel, getStatusLabel, priorityLabels } from '../utils';
-
-const getInitials = (name?: string) => {
-  const safeName = (name ?? '').trim();
-  if (!safeName) return '??';
-  return safeName.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-};
 
 const KpiTile: React.FC<{
   title: string;
@@ -437,9 +432,7 @@ export const DashboardPage: React.FC = () => {
                 key={person.id}
                 className="flex items-center gap-3 rounded-xl border border-[#ededed] bg-[#f9f9f9] px-3 py-2"
               >
-                <div className="h-10 w-10 rounded-lg bg-[#353535] text-white flex items-center justify-center text-xs font-semibold">
-                  {getInitials(person.name)}
-                </div>
+                <UserAvatar name={person.name} avatar={person.avatar} className="h-10 w-10 rounded-lg bg-[#353535] text-xs text-white" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-[#2f2f2f]">{person.name}</p>
                   <p className="text-xs text-[#9d9d9d]">{getRoleLabel(person.role)}</p>
@@ -465,9 +458,7 @@ export const DashboardPage: React.FC = () => {
           {worker ? (
             <div className="space-y-3 rounded-xl border border-[#ededed] bg-[#f9f9f9] p-4">
               <div className="flex items-center gap-3">
-                <div className="h-16 w-16 rounded-xl bg-[#353535] text-white flex items-center justify-center text-xl font-semibold">
-                  {getInitials(worker.name)}
-                </div>
+                <UserAvatar name={worker.name} avatar={worker.avatar} className="h-16 w-16 rounded-xl bg-[#353535] text-xl text-white" />
                 <div className="flex-1">
                   <p className="text-base font-semibold text-[#2f2f2f]">{worker.name}</p>
                   <p className="text-sm text-[#9d9d9d]">{getRoleLabel(worker.role)}</p>
@@ -504,7 +495,8 @@ export const DashboardPage: React.FC = () => {
             {recentClosures.map((item) => (
               <div key={item.id} className="py-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  {item.actor && <UserAvatar name={item.actor.name} avatar={item.actor.avatar} className="h-9 w-9 bg-[#353535] text-[10px] text-white" />}
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[#2f2f2f]">
                       {[item.task.displayNumber, item.task.title].filter(Boolean).join(' · ')}
                     </p>

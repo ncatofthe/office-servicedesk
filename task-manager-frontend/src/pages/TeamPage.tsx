@@ -821,6 +821,7 @@ export const TeamPage: React.FC = () => {
              <UserCard
                key={u.id}
                name={u.name}
+               avatar={u.avatar}
                role={getRoleLabel(u.role)}
                done={u.doneTasks ?? 0}
                total={(u.doneTasks ?? 0) + (u.inProgressTasks ?? 0) || 1}

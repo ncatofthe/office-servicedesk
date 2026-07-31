@@ -47,6 +47,12 @@ if (!hasRequiredEnv) {
             name: 'Queue Requester',
             role: 'REQUESTER'
         });
+        const admin = await createTestUser(prisma, {
+            email: `task-status-admin-${runId}@example.com`,
+            password,
+            name: 'Task Status Admin',
+            role: 'ADMIN'
+        });
         const queueFolder = await prisma.ticketFolder.create({
             data: {
                 name: `Task status folder ${runId}`,
@@ -78,6 +84,7 @@ if (!hasRequiredEnv) {
         const assignedEmployeeLogin = await loginUser(app, { email: assignedEmployee.email, password });
         const queueAgentLogin = await loginUser(app, { email: queueAgent.email, password });
         const requesterLogin = await loginUser(app, { email: requester.email, password });
+        const adminLogin = await loginUser(app, { email: admin.email, password });
 
         const createdTask = await request(app)
             .post('/api/tasks')
@@ -118,7 +125,7 @@ if (!hasRequiredEnv) {
             await prisma.user.deleteMany({
                 where: {
                     id: {
-                        in: [authorAgent.id, assignedEmployee.id, queueAgent.id, requester.id]
+                        in: [authorAgent.id, assignedEmployee.id, queueAgent.id, requester.id, admin.id]
                     }
                 }
             });
@@ -127,6 +134,12 @@ if (!hasRequiredEnv) {
         await request(app)
             .patch(`/api/tasks/${createdTask.body.id}/status`)
             .set('Authorization', `Bearer ${requesterLogin.body.token}`)
+            .send({ status: 'IN_PROGRESS' })
+            .expect(403);
+
+        await request(app)
+            .patch(`/api/tasks/${createdTask.body.id}/status`)
+            .set('Authorization', `Bearer ${adminLogin.body.token}`)
             .send({ status: 'IN_PROGRESS' })
             .expect(403);
 
@@ -144,13 +157,32 @@ if (!hasRequiredEnv) {
             .send({ status: 'DONE' })
             .expect(403);
 
-        const doneResponse = await request(app)
+        await request(app)
+            .post(`/api/tasks/${createdTask.body.id}/assignees`)
+            .set('Authorization', `Bearer ${adminLogin.body.token}`)
+            .send({ userId: queueAgent.id })
+            .expect(201);
+
+        await request(app)
             .patch(`/api/tasks/${createdTask.body.id}/status`)
             .set('Authorization', `Bearer ${assignedEmployeeLogin.body.token}`)
             .send({ status: 'DONE' })
+            .expect(400);
+
+        const firstApproval = await request(app)
+            .post(`/api/tasks/${createdTask.body.id}/close-approve`)
+            .set('Authorization', `Bearer ${assignedEmployeeLogin.body.token}`)
+            .expect(200);
+        assert.equal(firstApproval.body.closed, false);
+        assert.equal(firstApproval.body.task.status, 'IN_PROGRESS');
+
+        const doneResponse = await request(app)
+            .post(`/api/tasks/${createdTask.body.id}/close-approve`)
+            .set('Authorization', `Bearer ${queueAgentLogin.body.token}`)
             .expect(200);
 
-        assert.equal(doneResponse.body.status, 'DONE');
+        assert.equal(doneResponse.body.closed, true);
+        assert.equal(doneResponse.body.task.status, 'DONE');
 
         const persistedTask = await prisma.task.findUnique({
             where: { id: createdTask.body.id }

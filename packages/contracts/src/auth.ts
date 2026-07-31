@@ -19,6 +19,7 @@ export interface UserDepartmentMembershipDto {
 export interface AuthUserDto {
   id: string;
   name: string;
+  avatar?: string | null;
   email: string;
   role: UserRole;
   isActive: boolean;

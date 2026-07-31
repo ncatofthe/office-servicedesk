@@ -11,6 +11,7 @@ export interface TeamUserDto extends CurrentUserDto {
 
 export interface UpdateUserProfileRequestDto {
   name?: string;
+  avatar?: string | null;
   email?: string;
   password?: string;
   position?: string | null;

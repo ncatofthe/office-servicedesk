@@ -27,6 +27,7 @@ const serializeAuthUser = (user) => {
     return {
         id: user.id,
         name: user.name,
+        avatar: Object.prototype.hasOwnProperty.call(user, 'avatar') ? user.avatar : undefined,
         email: user.email,
         role: user.role,
         isActive: Object.prototype.hasOwnProperty.call(user, 'isActive') ? user.isActive : true,

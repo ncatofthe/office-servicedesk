@@ -14,6 +14,15 @@ import type { ServiceDeskFolder } from '../types';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { TASK_BOARD_COLUMNS, TASK_CREATION_STATUS_OPTIONS, normalizeWorkflowStatus } from '../utils';
 
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error !== 'object' || error === null) {
+    return fallback;
+  }
+
+  const response = (error as { response?: { data?: { error?: string; message?: string } } }).response;
+  return response?.data?.error || response?.data?.message || fallback;
+};
+
 const toFolderOptions = (folders: ServiceDeskFolder[]): TaskDepartmentOption[] =>
   folders
     .filter((folder) => folder.isActive !== false)
@@ -52,6 +61,7 @@ export const KanbanPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [boardError, setBoardError] = useState('');
   const columnMeta: Record<string, { surface: string; badge: string }> = {
     NEW: {
       surface: 'border-[#dce3f2] bg-[linear-gradient(180deg,#f7f9fd_0%,#eff3fb_100%)]',
@@ -113,12 +123,40 @@ export const KanbanPage: React.FC = () => {
     }
   }, [defaultFolderId, openCreate]);
 
-  const onDrop = (status: TaskStatus, id: string) => {
+  const isOwnedByCurrentUser = (taskId: string) => Boolean(
+    user && tasks.find((task) => task.id === taskId)?.assignees.some((assignee) => assignee.userId === user.id)
+  );
+
+  const onDrop = async (status: TaskStatus, id: string) => {
     if (isReadOnlyBoard) {
       return;
     }
 
-    return moveTask(id, status);
+    const task = tasks.find((item) => item.id === id);
+    if (!task || normalizeWorkflowStatus(task.status) === status) {
+      return;
+    }
+
+    setBoardError('');
+    setSuccessMessage('');
+
+    if (!isOwnedByCurrentUser(id)) {
+      setBoardError('Изменять статус может только назначенный исполнитель. Для административной передачи сначала переназначьте заявку.');
+      return;
+    }
+
+    if (status === 'DONE' && task.assignees.length > 1) {
+      setSelectedTaskId(id);
+      setBoardError('У заявки несколько исполнителей. Откройте её и подтвердите закрытие — заявка завершится после согласия всех исполнителей.');
+      return;
+    }
+
+    try {
+      await moveTask(id, status);
+      setSuccessMessage('Статус заявки обновлён.');
+    } catch (error) {
+      setBoardError(getApiErrorMessage(error, 'Не удалось изменить статус заявки. Откройте карточку и проверьте исполнителя.'));
+    }
   };
 
   return (
@@ -159,6 +197,12 @@ export const KanbanPage: React.FC = () => {
       {successMessage && (
         <div className="rounded-[12px] border border-[#b8e4c6] bg-[#eef9f2] px-4 py-3 text-sm text-[#1f7a42]">
           {successMessage}
+        </div>
+      )}
+
+      {boardError && (
+        <div className="rounded-[12px] border border-[#efc1c1] bg-[#fff3f3] px-4 py-3 text-sm text-[#a12f2f]" role="alert">
+          {boardError}
         </div>
       )}
 
@@ -204,8 +248,9 @@ export const KanbanPage: React.FC = () => {
             {columnTasks.map((t) => (
               <div
                 key={t.id}
-                draggable={!isReadOnlyBoard}
-                className="cursor-grab active:cursor-grabbing"
+                draggable={!isReadOnlyBoard && isOwnedByCurrentUser(t.id)}
+                className={!isReadOnlyBoard && isOwnedByCurrentUser(t.id) ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}
+                title={!isReadOnlyBoard && !isOwnedByCurrentUser(t.id) ? 'Статус меняет назначенный исполнитель' : undefined}
                 onDragStart={(e) => e.dataTransfer.setData('task', t.id)}
               >
                 <TaskCard task={t} onClick={() => setSelectedTaskId(t.id)} />
@@ -282,7 +327,7 @@ export const KanbanPage: React.FC = () => {
                 </select>
               </div>
             )}
-            <div>
+            {user?.role === 'ADMIN' && <div>
               <label className="text-sm text-[#5f5f5f]">Исполнители</label>
               <select
                 multiple
@@ -297,7 +342,7 @@ export const KanbanPage: React.FC = () => {
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
-            </div>
+            </div>}
           </div>
           <div
             className="border border-dashed border-[#d8d8d8] rounded-[10px] p-4 text-center text-sm text-[#5f5f5f] bg-[#f8f8f8]"
@@ -342,7 +387,7 @@ export const KanbanPage: React.FC = () => {
                     status,
                     dueDate: dueDate || undefined,
                     folderId: folderId || undefined,
-                    assigneeIds: assignees
+                    assigneeIds: user?.role === 'ADMIN' ? assignees : []
                   });
                   if (files.length) {
                     await Promise.all(files.map((f) => filesApi.uploadTaskFile(task.id, f)));

@@ -8,10 +8,12 @@ const {
 } = require('../utils/attachment.utils.js');
 const taskService = require('./task.service.js');
 const productSettingsService = require('./product-settings.service.js');
+const { normalizeAvatarDataUrl } = require('../utils/avatar.js');
 
 const CHAT_USER_SELECT = {
     id: true,
     name: true,
+    avatar: true,
     email: true,
     role: true,
     position: true,
@@ -251,6 +253,7 @@ const serializeThread = async(chat, actorId) => {
         id: chat.id,
         kind: chat.kind,
         createdById: chat.createdById || null,
+        avatar: chat.avatar || null,
         title: chat.kind === 'DEPARTMENT'
             ? (chat.department?.name || chat.title || 'Отдел')
             : (chat.title || null),
@@ -398,16 +401,30 @@ const assertThreadManagementAccess = async(chatId, actor) => {
 
 const updateThread = async(chatId, actor, payload = {}) => {
     await assertThreadManagementAccess(chatId, actor);
-    if (!Object.prototype.hasOwnProperty.call(payload, 'title') || typeof payload.title !== 'string') {
-        throw new Error('Укажите название чата.');
+    const hasTitle = Object.prototype.hasOwnProperty.call(payload, 'title');
+    const hasAvatar = Object.prototype.hasOwnProperty.call(payload, 'avatar');
+    if (!hasTitle && !hasAvatar) {
+        throw new Error('Укажите название или аватар чата.');
     }
-    const title = payload.title.trim();
-    if (title.length > 80) {
-        throw new Error('Название чата не должно превышать 80 символов.');
+
+    const data = { updatedAt: new Date() };
+    if (hasTitle) {
+        if (typeof payload.title !== 'string') {
+            throw new Error('Название чата должно быть строкой.');
+        }
+        const title = payload.title.trim();
+        if (title.length > 80) {
+            throw new Error('Название чата не должно превышать 80 символов.');
+        }
+        data.title = title || null;
     }
+    if (hasAvatar) {
+        data.avatar = normalizeAvatarDataUrl(payload.avatar);
+    }
+
     await prisma.chatThread.update({
         where: { id: chatId },
-        data: { title: title || null, updatedAt: new Date() }
+        data
     });
     return loadThread(chatId, actor.id);
 };

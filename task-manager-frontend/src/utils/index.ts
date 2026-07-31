@@ -186,6 +186,9 @@ export function getAvailableTaskStatusOptions(
   }
 
   if (role === 'ADMIN') {
+    if (!options?.isAssignee) {
+      return [];
+    }
     return WORKFLOW_STATUS_OPTIONS
       .filter((status) => status !== currentStatus)
       .map((status) => ({

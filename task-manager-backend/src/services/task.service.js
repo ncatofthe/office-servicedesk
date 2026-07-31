@@ -455,7 +455,7 @@ const getMergeInfoForTask = async(taskId, db = prisma) => {
         mergedTasks: unionChildren.map(mapMergeRecord),
         parentLinks: asChild.map(mapMergeRecord),
         closeApproval: {
-            required: unionChildren.length > 0 && assigneeIds.length > 1,
+            required: assigneeIds.length > 1,
             assigneeIds,
             approvedAssigneeIds,
             pendingAssigneeIds,
@@ -492,7 +492,7 @@ const assertCoordinatedCloseReady = async(task, db = prisma) => {
     }
 
     if (approvalState.pendingAssigneeIds.length > 0) {
-        throw new Error('Для закрытия объединённой мастер-заявки нужны подтверждения всех назначенных исполнителей.');
+        throw new Error('Для закрытия заявки нужны подтверждения всех назначенных исполнителей.');
     }
 
     return approvalState;
@@ -867,6 +867,9 @@ const create = async(data, actor, options = {}) => {
     }
 
     const resolvedAssigneeIds = await assertAssignableAssigneeIds(assigneeIds, db);
+    if (!accessContext.isAdmin && resolvedAssigneeIds.length > 0) {
+        throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
+    }
 
     const persistTask = async(tx) => {
         const created = await tx.task.create({
@@ -1076,6 +1079,7 @@ const update = async(id, data, actor) => {
 
             if (JSON.stringify(oldAssigneeIds) !== JSON.stringify(newAssigneeIds)) {
                 await createHistory(id, actor.id, 'assigneeIds', oldAssigneeIds, newAssigneeIds, tx);
+                await tx.taskCloseApproval.deleteMany({ where: { taskId: id } });
             }
 
             await tx.taskAssignee.deleteMany({
@@ -1216,7 +1220,7 @@ const updateStatus = async(id, status, user) => {
         throw new Error('Requesters cannot change task status');
     }
 
-    if (!isAdmin && !isAssignee) {
+    if (!isAssignee) {
         throw new Error(TASK_OWNERSHIP_LOCKED_ERROR);
     }
 
@@ -1233,6 +1237,9 @@ const updateStatus = async(id, status, user) => {
     const slaUpdate = buildResolutionStatusForTask(task, status, now);
 
     await prisma.$transaction(async(tx) => {
+        if (oldStatus === 'DONE' && status !== 'DONE') {
+            await tx.taskCloseApproval.deleteMany({ where: { taskId: id } });
+        }
         await createHistory(id, user.id, 'status', oldStatus, status, tx);
         await tx.task.update({
             where: { id },
@@ -1270,6 +1277,63 @@ const updateStatus = async(id, status, user) => {
         where: { id },
         include: TASK_SUMMARY_INCLUDE
     });
+};
+
+const finalizeApprovedTaskClose = async(task, actor) => {
+    if (task.status === 'DONE') {
+        return false;
+    }
+
+    const now = new Date();
+    const slaUpdate = buildResolutionStatusForTask(task, 'DONE', now);
+    let closed = false;
+    await prisma.$transaction(async(tx) => {
+        const updated = await tx.task.updateMany({
+            where: {
+                id: task.id,
+                status: { not: 'DONE' }
+            },
+            data: {
+                status: 'DONE',
+                resolvedAt: slaUpdate.resolvedAt,
+                slaResolutionStatus: slaUpdate.slaResolutionStatus
+            }
+        });
+        if (updated.count === 0) {
+            return;
+        }
+
+        closed = true;
+        await createHistory(task.id, actor.id, 'status', task.status, 'DONE', tx);
+        await safeRecordTimelineEvent({
+            taskId: task.id,
+            actorId: actor.id,
+            type: 'STATUS_CHANGED',
+            title: 'Статус изменён',
+            description: `${task.status} -> DONE`,
+            metadata: {
+                fromStatus: task.status,
+                toStatus: 'DONE'
+            }
+        }, tx);
+        await syncUnionChildStatuses(task.id, 'DONE', actor.id, tx);
+    });
+
+    if (!closed) {
+        return false;
+    }
+
+    try {
+        await notificationService.notifyTaskStatusChanged(task.id, task.status, 'DONE', actor);
+    } catch (error) {
+        console.error('[notifications] Failed to notify after coordinated close', {
+            taskId: task.id,
+            actorId: actor?.id || null,
+            error: error.message
+        });
+    }
+
+    return closed;
 };
 
 const approveRequesterClose = async(taskId, actor) => {
@@ -1315,7 +1379,17 @@ const approveRequesterClose = async(taskId, actor) => {
         return updated;
     });
 
-    return { task: updatedTask };
+    const approvalState = await getCloseApprovalState(taskId);
+    const closed = approvalState.required && approvalState.pendingAssigneeIds.length === 0
+        ? await finalizeApprovedTaskClose(updatedTask, actor)
+        : false;
+
+    return {
+        task: closed
+            ? await prisma.task.findUnique({ where: { id: taskId }, include: TASK_SUMMARY_INCLUDE })
+            : updatedTask,
+        closed
+    };
 };
 
 const merge = async(masterTaskId, data, actor) => {
@@ -1489,6 +1563,10 @@ const approveClose = async(taskId, actor) => {
         throw new Error('Access denied');
     }
 
+    if (!['IN_PROGRESS', 'REVIEW', 'REWORK', 'POSTPONED'].includes(task.status)) {
+        throw new Error('Подтверждать закрытие можно только для заявки в работе.');
+    }
+
     const approvalState = await getCloseApprovalState(taskId);
     if (!approvalState.required) {
         throw new Error('Согласованное закрытие для этой заявки не требуется.');
@@ -1526,42 +1604,11 @@ const approveClose = async(taskId, actor) => {
     const nextApprovalState = await getCloseApprovalState(taskId);
     let closed = false;
 
-    if (nextApprovalState.pendingAssigneeIds.length === 0 && task.status !== 'DONE') {
-        const now = new Date();
-        const slaUpdate = buildResolutionStatusForTask(task, 'DONE', now);
-        await prisma.$transaction(async(tx) => {
-            await createHistory(taskId, actor.id, 'status', task.status, 'DONE', tx);
-            await tx.task.update({
-                where: { id: taskId },
-                data: {
-                    status: 'DONE',
-                    resolvedAt: slaUpdate.resolvedAt,
-                    slaResolutionStatus: slaUpdate.slaResolutionStatus
-                }
-            });
-            await safeRecordTimelineEvent({
-                taskId,
-                actorId: actor.id,
-                type: 'STATUS_CHANGED',
-                title: 'Статус изменён',
-                description: `${task.status} -> DONE`,
-                metadata: {
-                    fromStatus: task.status,
-                    toStatus: 'DONE'
-                }
-            }, tx);
-            await syncUnionChildStatuses(taskId, 'DONE', actor.id, tx);
-        });
-        closed = true;
-        try {
-            await notificationService.notifyTaskStatusChanged(taskId, task.status, 'DONE', actor);
-        } catch (error) {
-            console.error('[notifications] Failed to notify after coordinated close', {
-                taskId,
-                actorId: actor?.id || null,
-                error: error.message
-            });
-        }
+    if (
+        nextApprovalState.pendingAssigneeIds.length === 0
+        && (!task.requesterCloseRequired || task.requesterCloseApprovedAt)
+    ) {
+        closed = await finalizeApprovedTaskClose(task, actor);
     }
 
     const updatedTask = await prisma.task.findUnique({
@@ -1620,6 +1667,8 @@ const addAssignee = async(taskId, userId, actor) => {
                     throw new Error(TASK_OWNERSHIP_LOCKED_ERROR);
                 }
 
+                await tx.taskCloseApproval.deleteMany({ where: { taskId } });
+
                 const createdAssignee = await tx.taskAssignee.create({
                     data: { taskId, userId }
                 });
@@ -1674,6 +1723,7 @@ const removeAssignee = async(taskId, userId, actor) => {
 
     return prisma.$transaction(async(tx) => {
         const [userRecord] = await loadUsersByIds([userId], tx);
+        await tx.taskCloseApproval.deleteMany({ where: { taskId } });
         const deleted = await tx.taskAssignee.delete({
             where: { taskId_userId: { taskId, userId } }
         });

@@ -350,6 +350,7 @@ export const updateUserProfileRequestRuntimeSchema =
 
     const normalized = {
       name: readOptionalString(payload, 'name'),
+      avatar: readOptionalString(payload, 'avatar', { allowNull: true }),
       email: readOptionalString(payload, 'email'),
       password: readOptionalString(payload, 'password'),
       position: readOptionalString(payload, 'position', { allowNull: true }),

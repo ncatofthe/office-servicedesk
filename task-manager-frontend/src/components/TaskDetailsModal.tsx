@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, UserPlus, X } from 'lucide-react';
 import { Modal } from './ui/Modal';
+import { UserAvatar } from './ui/UserAvatar';
 import { CannedReplyPicker } from './canned-replies/CannedReplyPicker';
 import { tasksApi, commentsApi, filesApi, knowledgeApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +27,7 @@ import type {
   TaskTimelineEventType,
   TeamUser,
 } from '../types';
-import { getAvailableTaskStatusOptions, getRoleLabel, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
+import { getAvailableTaskStatusOptions, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 
 interface Props {
@@ -417,13 +418,14 @@ const normalizeMergeInfo = (task: TaskDetail | null, info?: TaskMergeInfo | null
   const confirmations = approvalConfirmations.length > 0
     ? approvalConfirmations
     : closure?.confirmations || source?.closeConfirmations || task?.closeConfirmations || [];
-  const required = Boolean(
-    closeApproval?.required ||
-    closure?.required ||
-    source?.requiresCloseConfirmation ||
-    task?.requiresCloseConfirmation ||
-    confirmations.length > 0
-  );
+  const required = closeApproval
+    ? Boolean(closeApproval.required)
+    : Boolean(
+        closure?.required ||
+        source?.requiresCloseConfirmation ||
+        task?.requiresCloseConfirmation ||
+        confirmations.length > 1
+      );
   const linkedTasks = normalizeMergeItems(source?.linkedTasks || [], 'child');
   const unionTasks = uniqueTaskReferences([
     ...(source?.unionTasks || []),
@@ -483,6 +485,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
   const [taskSaving, setTaskSaving] = useState(false);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assigneeToAdd, setAssigneeToAdd] = useState('');
   const [taskDeleting, setTaskDeleting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -523,8 +527,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [priorityDraft, setPriorityDraft] = useState<TaskPriority>('MEDIUM');
   const [dueDateDraft, setDueDateDraft] = useState('');
   const [folderIdDraft, setFolderIdDraft] = useState('');
-  const [assigneeIdsDraft, setAssigneeIdsDraft] = useState<string[]>([]);
   const [requesterCloseRequiredDraft, setRequesterCloseRequiredDraft] = useState(false);
+  const unassignedEditableUsers = task
+    ? assignableEditableUsers.filter((editableUser) => !task.assignees.some((assignee) => assignee.userId === editableUser.id))
+    : [];
 
   const mergedDepartmentOptions = task?.folder?.id && task.folder.name && !departmentOptions.some((folder) => folder.id === task.folder?.id)
     ? [
@@ -539,9 +545,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const isAssignee = Boolean(task && task.assignees.some((assignee) => assignee.userId === user?.id));
   const isAuthor = Boolean(task && task.authorId === user?.id);
   const isAssignedToAnotherAgent = Boolean(
-    task && user?.role === 'AGENT' && task.assignees.length > 0 && !isAssignee
+    task && (user?.role === 'AGENT' || user?.role === 'ADMIN') && task.assignees.length > 0 && !isAssignee
   );
-  const statusActionOptions = task
+  const rawStatusActionOptions = task
     ? getAvailableTaskStatusOptions(task.status, user?.role, { isAssignee, isAuthor })
     : [];
   const normalizedMergeInfo = normalizeMergeInfo(task, mergeInfo);
@@ -553,6 +559,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
     ...(normalizedMergeInfo.relatedTasks || []),
   ]).filter((item) => item.id !== taskId);
   const closeState = normalizedMergeInfo.closure || null;
+  const requiresCoordinatedClose = Boolean(task && task.assignees.length > 1);
+  const statusActionOptions = requiresCoordinatedClose
+    ? rawStatusActionOptions.filter((option) => option.value !== 'DONE')
+    : rawStatusActionOptions;
   const currentUserConfirmation = closeState?.confirmations.find((confirmation) => confirmation.userId === user?.id);
   const canConfirmClose = Boolean(closeState?.required && !closeState.isComplete && (!currentUserConfirmation || !currentUserConfirmation.confirmed));
   const mergeCandidateTasks = uniqueTaskReferences(
@@ -721,7 +731,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setPriorityDraft('MEDIUM');
       setDueDateDraft('');
       setFolderIdDraft('');
-      setAssigneeIdsDraft([]);
       return;
     }
 
@@ -730,7 +739,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
     setPriorityDraft(task.priority);
     setDueDateDraft(toDateInputValue(task.dueDate));
     setFolderIdDraft(task.folderId || '');
-    setAssigneeIdsDraft(task.assignees.map((assignee) => assignee.userId));
     setRequesterCloseRequiredDraft(Boolean(task.requesterCloseRequired));
   }, [task]);
 
@@ -848,7 +856,6 @@ export const TaskDetailsModal: React.FC<Props> = ({
         dueDate: dueDateDraft || null,
         folderId: folderIdDraft || null,
         requesterCloseRequired: requesterCloseRequiredDraft,
-        assigneeIds: assigneeIdsDraft,
       });
       await refreshTaskAndMergeInfo('Изменения сохранены.');
       onTaskUpdated?.(updated);
@@ -856,6 +863,38 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setError(getApiErrorMessage(actionError, 'Не удалось сохранить изменения заявки.'));
     } finally {
       setTaskSaving(false);
+    }
+  };
+
+  const addTaskAssignee = async () => {
+    if (!taskId || !assigneeToAdd || !isAdmin || assignmentSaving) return;
+    setAssignmentSaving(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      await tasksApi.addAssignee(taskId, assigneeToAdd);
+      setAssigneeToAdd('');
+      await refreshTaskAndMergeInfo('Исполнитель добавлен. Согласование закрытия начнётся заново.');
+    } catch (actionError) {
+      setError(getApiErrorMessage(actionError, 'Не удалось добавить исполнителя.'));
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
+  const removeTaskAssignee = async (userId: string, name: string) => {
+    if (!taskId || !isAdmin || assignmentSaving) return;
+    if (!window.confirm(`Снять исполнителя «${name}» с заявки? Текущие подтверждения закрытия будут сброшены.`)) return;
+    setAssignmentSaving(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      await tasksApi.removeAssignee(taskId, userId);
+      await refreshTaskAndMergeInfo('Исполнитель снят с заявки.');
+    } catch (actionError) {
+      setError(getApiErrorMessage(actionError, 'Не удалось снять исполнителя.'));
+    } finally {
+      setAssignmentSaving(false);
     }
   };
 
@@ -1107,11 +1146,16 @@ export const TaskDetailsModal: React.FC<Props> = ({
                   <div>
                     <p className="text-sm font-semibold text-[#26364f]">{requesterStatus?.title || getStatusLabel(task.status)}</p>
                     <p className="mt-1 text-xs leading-5 text-[#647086]">{requesterStatus?.description}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-[#5f6878]">
-                      <span>Исполнитель:</span>
-                      <span className="font-semibold text-[#273448]">
-                        {task.assignees?.map((assignee) => assignee.user.name).join(', ') || 'ещё не назначен'}
-                      </span>
+                    <div className="mt-3 text-xs text-[#5f6878]">
+                      <span>Исполнители:</span>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {task.assignees.length > 0 ? task.assignees.map((assignee) => (
+                          <span key={assignee.userId} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2 py-1 font-semibold text-[#273448]">
+                            <UserAvatar name={assignee.user.name} avatar={assignee.user.avatar} className="h-5 w-5 bg-[#dfe6f2] text-[8px] text-[#273448]" />
+                            {assignee.user.name}
+                          </span>
+                        )) : <span className="font-semibold text-[#273448]">ещё не назначен</span>}
+                      </div>
                     </div>
                     {task.requesterCloseRequired && !task.requesterCloseApprovedAt && isAuthor && (
                       <button
@@ -1150,6 +1194,77 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     <span className="chip">Только просмотр</span>
                     )}
                   </div>
+                  <div className="mt-3 rounded-[10px] border border-[#e1e4e8] bg-white p-3" data-testid="task-assignees-panel">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-[#3f4752]">Исполнители</p>
+                      <span className="text-[10px] text-[#8b929a]">{task.assignees.length}</span>
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {task.assignees.length > 0 ? task.assignees.map((assignee) => (
+                        <div key={assignee.userId} className="flex items-center gap-2 rounded-[9px] bg-[#f5f6f7] px-2 py-1.5">
+                          <UserAvatar name={assignee.user.name} avatar={assignee.user.avatar} className="h-7 w-7 bg-[#2d3c54] text-[9px] text-white" />
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-[#3b4149]">{assignee.user.name}</span>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              className="grid h-7 w-7 place-items-center rounded-[7px] text-[#9a4a4a] hover:bg-[#ffeaea]"
+                              onClick={() => void removeTaskAssignee(assignee.userId, assignee.user.name)}
+                              disabled={assignmentSaving}
+                              title="Снять исполнителя"
+                              aria-label={`Снять исполнителя ${assignee.user.name}`}
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                      )) : (
+                        <p className="text-xs text-[#8a8f96]">Исполнитель пока не назначен.</p>
+                      )}
+                    </div>
+                    {isAdmin && (
+                      <div className="mt-2 flex gap-2">
+                        <select
+                          className="input h-9 min-w-0 flex-1 py-1 text-xs"
+                          value={assigneeToAdd}
+                          onChange={(event) => setAssigneeToAdd(event.target.value)}
+                          disabled={assignmentSaving || unassignedEditableUsers.length === 0}
+                          aria-label="Добавить исполнителя"
+                        >
+                          <option value="">{unassignedEditableUsers.length > 0 ? 'Добавить исполнителя…' : 'Все назначены'}</option>
+                          {unassignedEditableUsers.map((editableUser) => (
+                            <option key={editableUser.id} value={editableUser.id}>{editableUser.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-primary grid h-9 w-9 shrink-0 place-items-center p-0"
+                          onClick={() => void addTaskAssignee()}
+                          disabled={!assigneeToAdd || assignmentSaving}
+                          title="Добавить исполнителя"
+                        >
+                          {assignmentSaving ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                        </button>
+                      </div>
+                    )}
+                    {task.assignees.length > 1 && (
+                      <p className="mt-2 text-[10px] leading-4 text-[#68758a]">Закрытие станет общим только после подтверждения каждого исполнителя.</p>
+                    )}
+                  </div>
+                  {requiresCoordinatedClose && (
+                    <div className="mt-3 rounded-[10px] border border-[#dce3f2] bg-white p-3">
+                      <p className="text-xs font-semibold text-[#344563]">Согласованное закрытие</p>
+                      <p className="mt-1 text-xs leading-5 text-[#6f7785]">
+                        {closeState
+                          ? `Подтвердили ${closeState.confirmations.filter((item) => item.confirmed).length} из ${closeState.confirmations.length || task.assignees.length} исполнителей.`
+                          : 'Загружаем состояние согласования...'}
+                      </p>
+                      {canConfirmClose && (
+                        <button type="button" className="btn btn-primary mt-2 w-full" onClick={confirmClose} disabled={closeConfirming}>
+                          {closeConfirming ? 'Подтверждаем...' : 'Подтвердить закрытие'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   </>
                 )}
               </div>
@@ -1416,9 +1531,12 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       return (
                         <div
                           key={c.id}
-                          className={`flex ${isInternal ? 'justify-center' : isOwn ? 'justify-end' : 'justify-start'}`}
+                          className={`flex items-end gap-2 ${isInternal ? 'justify-center' : isOwn ? 'justify-end' : 'justify-start'}`}
                           data-testid="comment-item"
                         >
+                          {!isOwn && !isInternal && (
+                            <UserAvatar name={c.author?.name} avatar={c.author?.avatar} className="h-7 w-7 bg-[#dde3ea] text-[9px] text-[#3f4f64]" />
+                          )}
                           <div className={`group max-w-[86%] sm:max-w-[72%] rounded-[16px] px-3.5 py-3 shadow-sm ${
                             isInternal
                               ? 'border border-[#ead7a7] bg-[#fff8df]'
@@ -1477,6 +1595,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
                               </>
                             )}
                           </div>
+                          {isOwn && !isInternal && (
+                            <UserAvatar name={c.author?.name} avatar={c.author?.avatar || user?.avatar} className="h-7 w-7 bg-[#34507a] text-[9px] text-white" />
+                          )}
                         </div>
                       );
                     })}
@@ -1821,8 +1942,15 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       <p className="mt-1 font-medium text-[#1f1f1f]">{task.author?.name || 'Не указан'}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-[#8a8a8a]">Исполнитель</p>
-                      <p className="mt-1 font-medium text-[#1f1f1f]">{task.assignees?.map((assignee) => assignee.user.name).join(', ') || 'Не назначен'}</p>
+                      <p className="text-xs text-[#8a8a8a]">Исполнители</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {task.assignees.length > 0 ? task.assignees.map((assignee) => (
+                          <span key={assignee.userId} className="inline-flex items-center gap-1.5 rounded-full bg-[#f3f4f5] px-2 py-1 text-xs font-medium text-[#1f1f1f]">
+                            <UserAvatar name={assignee.user.name} avatar={assignee.user.avatar} className="h-5 w-5 bg-[#2d3c54] text-[8px] text-white" />
+                            {assignee.user.name}
+                          </span>
+                        )) : <span className="font-medium text-[#1f1f1f]">Не назначен</span>}
+                      </div>
                     </div>
                     <div>
                       <p className="text-xs text-[#8a8a8a]">Сущность</p>
@@ -1949,22 +2077,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#4a4a4a]">Исполнители</label>
-                  <select
-                    multiple
-                    className="input h-24 w-full"
-                    value={assigneeIdsDraft}
-                    onChange={(event) => {
-                      const selectedIds = Array.from(event.target.selectedOptions).map((option) => option.value);
-                      setAssigneeIdsDraft(selectedIds);
-                    }}
-                    disabled={taskSaving || taskDeleting}
-                  >
-                    {assignableEditableUsers.map((editableUser) => (
-                      <option key={editableUser.id} value={editableUser.id}>
-                        {editableUser.name} · {getRoleLabel(editableUser.role)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="rounded-[10px] border border-[#e2e2e2] bg-white px-3 py-2 text-xs leading-5 text-[#6f747b]">
+                    Состав: {task.assignees.map((assignee) => assignee.user.name).join(', ') || 'не назначен'}. Добавление и снятие выполняются в видимом блоке «Исполнители» сверху карточки.
+                  </div>
                 </div>
               </div>
 

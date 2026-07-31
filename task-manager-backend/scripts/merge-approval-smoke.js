@@ -109,7 +109,7 @@ const main = async() => {
         throw new Error(`Child task display number should follow master display number ${master.displayNumber}, got ${mergedChild.displayNumber}.`);
     }
 
-    const closeAttempt = await requestAllowError(`/api/tasks/${master.id}/status`, authorized(adminToken, {
+    const closeAttempt = await requestAllowError(`/api/tasks/${master.id}/status`, authorized(employeeToken, {
         method: 'PATCH',
         body: JSON.stringify({ status: 'DONE' })
     }));

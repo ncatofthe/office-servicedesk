@@ -100,8 +100,10 @@ const create = async(req, res) => {
         });
         res.status(201).json(serializeTaskSummary(task));
     } catch (error) {
-        if (error.message === 'Access denied') {
-            return res.status(403).json({ error: 'Access denied' });
+        if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
+            return res.status(403).json({ error: error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR
+                ? 'Назначать исполнителей при создании заявки может только администратор.'
+                : 'Access denied' });
         }
         res.status(400).json({ error: error.message });
     }
@@ -205,7 +207,10 @@ const approveRequesterClose = async(req, res) => {
         const result = await taskService.approveRequesterClose(req.params.id, req.user);
         res.json({
             task: serializeTaskSummary(result.task),
-            message: 'Заявитель подтвердил закрытие заявки.'
+            message: result.closed
+                ? 'Заявитель подтвердил закрытие. Все согласования получены, заявка закрыта.'
+                : 'Заявитель подтвердил закрытие заявки.',
+            closed: Boolean(result.closed)
         });
     } catch (error) {
         if (error.message === 'Task not found') {

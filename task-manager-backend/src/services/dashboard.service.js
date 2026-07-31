@@ -119,7 +119,7 @@ const getDashboard = async(user) => {
             task: activeWhere
         },
         include: {
-            user: { select: { id: true, name: true, role: true } }
+            user: { select: { id: true, name: true, avatar: true, role: true } }
         }
     });
 
@@ -127,7 +127,7 @@ const getDashboard = async(user) => {
     activeTasks.forEach(function(ta) {
         const key = ta.user.id;
         if (!activeMap[key]) {
-            activeMap[key] = { id: ta.user.id, name: ta.user.name, role: ta.user.role, tasks_count: 0 };
+            activeMap[key] = { id: ta.user.id, name: ta.user.name, avatar: ta.user.avatar, role: ta.user.role, tasks_count: 0 };
         }
         activeMap[key].tasks_count++;
     });
@@ -154,7 +154,7 @@ const getDashboard = async(user) => {
             task: workerWhere
         },
         include: {
-            user: { select: { id: true, name: true, role: true } }
+            user: { select: { id: true, name: true, avatar: true, role: true } }
         }
     });
 
@@ -162,7 +162,7 @@ const getDashboard = async(user) => {
     workerTasks.forEach(function(ta) {
         const key = ta.user.id;
         if (!workerMap[key]) {
-            workerMap[key] = { id: ta.user.id, name: ta.user.name, role: ta.user.role, done_count: 0 };
+            workerMap[key] = { id: ta.user.id, name: ta.user.name, avatar: ta.user.avatar, role: ta.user.role, done_count: 0 };
         }
         workerMap[key].done_count++;
     });
@@ -176,7 +176,7 @@ const getDashboard = async(user) => {
             task: taskWhere
         },
         include: {
-            actor: { select: { id: true, name: true, role: true } },
+            actor: { select: { id: true, name: true, avatar: true, role: true } },
             task: {
                 select: {
                     id: true,

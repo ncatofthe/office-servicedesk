@@ -1,5 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
+const { MAX_AVATAR_DATA_URL_LENGTH } = require('../utils/avatar.js');
 const authMiddleware = require('../middlewares/auth.middleware.js');
 const roleMiddleware = require('../middlewares/role.middleware.js');
 const { upload } = require('../middlewares/upload.middleware.js');
@@ -37,7 +38,14 @@ router.post(
 );
 router.patch(
     '/:chatId',
-    body('title').isString().isLength({ max: 80 }).withMessage('Название чата не должно превышать 80 символов.'),
+    body().custom((value) => {
+        if (!Object.prototype.hasOwnProperty.call(value || {}, 'title') && !Object.prototype.hasOwnProperty.call(value || {}, 'avatar')) {
+            throw new Error('Укажите название или аватар чата.');
+        }
+        return true;
+    }),
+    body('title').optional().isString().isLength({ max: 80 }).withMessage('Название чата не должно превышать 80 символов.'),
+    body('avatar').optional({ nullable: true }).isString().isLength({ max: MAX_AVATAR_DATA_URL_LENGTH }).withMessage('Аватар чата слишком большой.'),
     validate,
     chatController.updateThread
 );

@@ -167,6 +167,7 @@ export interface ChatSettings {
 export interface ChatUser {
   id: string;
   name: string;
+  avatar?: string | null;
   email: string;
   role: UserRole;
   position?: string | null;
@@ -213,6 +214,7 @@ export interface ChatThread {
   id: string;
   kind: ChatKind;
   title?: string | null;
+  avatar?: string | null;
   createdById?: string | null;
   department?: {
     id: string;
@@ -949,12 +951,14 @@ export interface DashboardData {
   activeEmployees: {
     id: string;
     name: string;
+    avatar?: string | null;
     role: UserRole;
     tasks_count: number;
   }[];
   workerOfMonth: {
     id: string;
     name: string;
+    avatar?: string | null;
     role: UserRole;
     done_count: number;
   } | null;
@@ -964,6 +968,7 @@ export interface DashboardData {
     actor: {
       id: string;
       name: string;
+      avatar?: string | null;
       role: UserRole;
     } | null;
     task: {

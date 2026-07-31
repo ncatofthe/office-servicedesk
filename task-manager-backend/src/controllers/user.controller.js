@@ -22,8 +22,9 @@ const {
     canManageUsers,
     canReadUsers
 } = require('../utils/roles.js');
+const { normalizeAvatarDataUrl } = require('../utils/avatar.js');
 
-const ALLOWED_PROFILE_FIELDS = ['name', 'email', 'password', 'position', 'department', 'skills'];
+const ALLOWED_PROFILE_FIELDS = ['name', 'avatar', 'email', 'password', 'position', 'department', 'skills'];
 const ALLOWED_ROLE_VALUES = PRODUCT_USER_ROLES;
 const USER_DELETION_HARD_BLOCKER_LABELS = {
     selfDelete: 'текущая учётная запись администратора',
@@ -315,6 +316,10 @@ const updateProfile = async(req, res) => {
             if (hasOwnProperty(req.body, field)) {
                 data[field] = req.body[field];
             }
+        }
+
+        if (hasOwnProperty(req.body, 'avatar')) {
+            data.avatar = normalizeAvatarDataUrl(req.body.avatar);
         }
 
         if (hasOwnProperty(req.body, 'skills')) {

@@ -23,7 +23,9 @@ import { chatsApi, commentsApi, filesApi, tasksApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
+import { UserAvatar } from '../components/ui/UserAvatar';
 import { formatDateTime, getInitials } from '../utils';
+import { prepareAvatarImage } from '../utils/avatar';
 import type {
   ChatAttachment,
   ChatMessage,
@@ -236,6 +238,7 @@ export const ChatsPage: React.FC = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -263,6 +266,7 @@ export const ChatsPage: React.FC = () => {
   const [participantSaving, setParticipantSaving] = useState(false);
   const [threadSaving, setThreadSaving] = useState(false);
   const [chatTitle, setChatTitle] = useState('');
+  const [chatAvatar, setChatAvatar] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<{ url: string; filename: string } | null>(null);
 
   const selectedChat = selection?.type === 'chat'
@@ -513,21 +517,35 @@ export const ChatsPage: React.FC = () => {
 
   const openConversationSettings = () => {
     setChatTitle(selectedChat?.title || '');
+    setChatAvatar(selectedChat?.avatar || null);
     setMembersOpen(true);
   };
 
-  const saveChatTitle = async () => {
+  const saveChatSettings = async () => {
     if (!selectedChat || !canManageSelectedChat || threadSaving) return;
     setThreadSaving(true);
     setError('');
     try {
-      const updated = await chatsApi.updateThread(selectedChat.id, chatTitle);
+      const updated = await chatsApi.updateThread(selectedChat.id, { title: chatTitle, avatar: chatAvatar });
       setThreads((current) => current.map((item) => item.id === updated.id ? updated : item));
       setChatTitle(updated.title || '');
+      setChatAvatar(updated.avatar || null);
     } catch (updateError) {
-      setError(getApiError(updateError, 'Не удалось сохранить название чата.'));
+      setError(getApiError(updateError, 'Не удалось сохранить настройки чата.'));
     } finally {
       setThreadSaving(false);
+    }
+  };
+
+  const chooseChatAvatar = async (file?: File) => {
+    if (!file || !canManageSelectedChat) return;
+    setError('');
+    try {
+      setChatAvatar(await prepareAvatarImage(file));
+    } catch (avatarError) {
+      setError(avatarError instanceof Error ? avatarError.message : 'Не удалось обработать аватар чата.');
+    } finally {
+      if (chatAvatarInputRef.current) chatAvatarInputRef.current.value = '';
     }
   };
 
@@ -794,6 +812,9 @@ export const ChatsPage: React.FC = () => {
                       ? `${getStatusLabel(item.task.status)} · ${item.task.author?.name || 'Заявка'}`
                       : getChatPreview(item.chat, user?.id);
                     const unread = !isTicket ? item.chat.unreadCount : 0;
+                    const avatar = isTicket
+                      ? item.task.author?.avatar
+                      : item.chat.avatar || (item.chat.kind === 'DIRECT' ? getDirectPeer(item.chat, user?.id)?.avatar : null);
                     return (
                       <button
                         key={`${item.type}:${item.id}`}
@@ -805,17 +826,21 @@ export const ChatsPage: React.FC = () => {
                       >
                         {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-r-full bg-white" />}
                         <div className="flex items-center gap-2.5">
-                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
-                            isTicket
-                              ? 'bg-[#e9dfcf] text-[#62533e]'
-                              : item.chat.kind === 'DEPARTMENT'
-                                ? 'bg-[#d9e5e3] text-[#3f5a57]'
-                                : 'bg-white/15 text-white'
-                          }`}>
-                            {!isTicket && item.chat.kind === 'DIRECT'
-                              ? getInitials(getDirectPeer(item.chat, user?.id)?.name || title)
-                              : <Icon size={18} />}
-                          </div>
+                          {avatar ? (
+                            <UserAvatar name={title} avatar={avatar} className="h-10 w-10 border border-white/15 bg-white/15 text-[11px] text-white" />
+                          ) : (
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
+                              isTicket
+                                ? 'bg-[#e9dfcf] text-[#62533e]'
+                                : item.chat.kind === 'DEPARTMENT'
+                                  ? 'bg-[#d9e5e3] text-[#3f5a57]'
+                                  : 'bg-white/15 text-white'
+                            }`}>
+                              {!isTicket && item.chat.kind === 'DIRECT'
+                                ? getInitials(getDirectPeer(item.chat, user?.id)?.name || title)
+                                : <Icon size={18} />}
+                            </div>
+                          )}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
                               <p className={`truncate text-[12px] ${unread > 0 ? 'font-semibold text-white' : 'font-medium text-white/85'}`}>{title}</p>
@@ -857,15 +882,23 @@ export const ChatsPage: React.FC = () => {
                   <button type="button" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#555] hover:bg-[#f1f1ef] md:hidden" onClick={() => setSelection(null)} aria-label="Назад">
                     <ArrowLeft size={17} className="mx-auto" />
                   </button>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8ecf1] text-xs font-semibold text-[#2d3c54]">
-                    {selectedChat?.kind === 'DIRECT'
-                      ? getInitials(getDirectPeer(selectedChat, user?.id)?.name || currentTitle)
-                      : selectedTicket
-                        ? <Ticket size={17} />
-                        : selectedChat?.kind === 'DEPARTMENT'
-                          ? <Building2 size={17} />
-                          : <Users size={17} />}
-                  </div>
+                  {(selectedChat?.avatar || (selectedChat?.kind === 'DIRECT' && getDirectPeer(selectedChat, user?.id)?.avatar) || selectedTicket?.author?.avatar) ? (
+                    <UserAvatar
+                      name={currentTitle}
+                      avatar={selectedChat?.avatar || (selectedChat?.kind === 'DIRECT' ? getDirectPeer(selectedChat, user?.id)?.avatar : null) || selectedTicket?.author?.avatar}
+                      className="h-10 w-10 bg-[#e8ecf1] text-xs text-[#2d3c54]"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8ecf1] text-xs font-semibold text-[#2d3c54]">
+                      {selectedChat?.kind === 'DIRECT'
+                        ? getInitials(getDirectPeer(selectedChat, user?.id)?.name || currentTitle)
+                        : selectedTicket
+                          ? <Ticket size={17} />
+                          : selectedChat?.kind === 'DEPARTMENT'
+                            ? <Building2 size={17} />
+                            : <Users size={17} />}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <h2 className="truncate text-[14px] font-semibold text-[#222]">{currentTitle}</h2>
                     <p className="mt-0.5 truncate text-[11px] text-[#858580]">{currentKind} · {currentSubtitle}</p>
@@ -929,9 +962,7 @@ export const ChatsPage: React.FC = () => {
                               )}
                               <div className={`group flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}>
                                 {!own && (
-                                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#dde3ea] text-[10px] font-semibold text-[#3f4f64]">
-                                    {getInitials(message.author.name)}
-                                  </div>
+                                  <UserAvatar name={message.author.name} avatar={message.author.avatar} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
                                 )}
                                 <div className={`flex max-w-[86%] flex-col ${own ? 'items-end' : 'items-start'} sm:max-w-[72%]`}>
                                   {!own && <p className="mb-1 px-1 text-[11px] font-medium text-[#676d75]">{message.author.name}</p>}
@@ -993,6 +1024,9 @@ export const ChatsPage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
+                                {own && (
+                                  <UserAvatar name={message.author.name} avatar={message.author.avatar || user?.avatar} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
+                                )}
                               </div>
                             </React.Fragment>
                           );
@@ -1034,7 +1068,10 @@ export const ChatsPage: React.FC = () => {
                                 </div>
                               </div>
                             ) : (
-                              <div className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
+                              <div className={`flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}>
+                                {item.type === 'message' && !own && (
+                                  <UserAvatar name={item.message.author?.name} avatar={item.message.author?.avatar} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
+                                )}
                                 <div className={`max-w-[86%] rounded-[17px] px-3.5 py-2.5 sm:max-w-[72%] ${
                                   own
                                     ? 'rounded-br-[5px] bg-[#2d3c54] text-white shadow-[0_5px_14px_rgba(45,60,84,0.16)]'
@@ -1080,6 +1117,9 @@ export const ChatsPage: React.FC = () => {
                                   )}
                                   <p className={`mt-1 text-right text-[10px] ${own ? 'text-white/55' : 'text-[#999]'}`}>{formatDateTime(item.createdAt)}</p>
                                 </div>
+                                {item.type === 'message' && own && (
+                                  <UserAvatar name={item.message.author?.name} avatar={item.message.author?.avatar || user?.avatar} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
+                                )}
                               </div>
                             )}
                           </React.Fragment>
@@ -1190,7 +1230,7 @@ export const ChatsPage: React.FC = () => {
               <DataState variant="empty" message="Подходящих пользователей не найдено." />
             ) : availableUsers.map((candidate) => (
               <button key={candidate.id} type="button" className="flex w-full items-center gap-3 rounded-[11px] p-3 text-left hover:bg-[#f5f5f3]" onClick={() => void startDirect(candidate.id)} disabled={creatingDirect}>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2f2f2f] text-sm font-semibold text-white">{getInitials(candidate.name)}</div>
+                <UserAvatar name={candidate.name} avatar={candidate.avatar} className="h-10 w-10 bg-[#2f2f2f] text-sm text-white" />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-[#252525]">{candidate.name}</p>
                   <p className="truncate text-xs text-[#888]">{candidate.position || candidate.email}</p>
@@ -1205,6 +1245,32 @@ export const ChatsPage: React.FC = () => {
         <div className="space-y-4">
           {selectedChat && selectedChat.kind !== 'DEPARTMENT' && (
             <div className="rounded-[12px] border border-[#e3e3e3] bg-[#f8f8f7] p-4">
+              <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-[#e4e4e2] pb-4">
+                <UserAvatar name={getChatTitle(selectedChat, user?.id)} avatar={chatAvatar} className="h-16 w-16 bg-[#2d3c54] text-lg text-white" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-[#292929]">Аватар чата</p>
+                  <p className="mt-1 text-xs leading-5 text-[#858585]">Отдельная картинка помогает быстро отличать рабочие беседы.</p>
+                  {canManageSelectedChat && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <input
+                        ref={chatAvatarInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        className="hidden"
+                        onChange={(event) => void chooseChatAvatar(event.target.files?.[0])}
+                      />
+                      <button type="button" className="btn h-9 px-3 text-xs" onClick={() => chatAvatarInputRef.current?.click()} disabled={threadSaving}>
+                        Выбрать изображение
+                      </button>
+                      {chatAvatar && (
+                        <button type="button" className="btn h-9 px-3 text-xs" onClick={() => setChatAvatar(null)} disabled={threadSaving}>
+                          Удалить
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
               <label htmlFor="chat-title" className="text-sm font-semibold text-[#292929]">Название чата</label>
               <p className="mt-1 text-xs leading-5 text-[#858585]">
                 Особенно удобно для бесед с несколькими участниками. Пустое название вернёт автоматический список имён.
@@ -1220,7 +1286,7 @@ export const ChatsPage: React.FC = () => {
                   maxLength={80}
                 />
                 {canManageSelectedChat && (
-                  <button type="button" className="btn btn-primary shrink-0" onClick={() => void saveChatTitle()} disabled={threadSaving}>
+                  <button type="button" className="btn btn-primary shrink-0" onClick={() => void saveChatSettings()} disabled={threadSaving}>
                     {threadSaving ? 'Сохраняем…' : 'Сохранить'}
                   </button>
                 )}
@@ -1243,7 +1309,7 @@ export const ChatsPage: React.FC = () => {
                 && (member.userId === user?.id || user?.role === 'ADMIN' || selectedTicket?.authorId === user?.id);
               return (
                 <div key={member.userId} className="flex items-center gap-3 rounded-[11px] border border-[#e5e5e5] bg-white p-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#eeeeeb] text-sm font-semibold text-[#4d4d4d]">{getInitials(member.user.name)}</div>
+                  <UserAvatar name={member.user.name} avatar={member.user.avatar} className="h-10 w-10 bg-[#eeeeeb] text-sm text-[#4d4d4d]" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-[#292929]">{member.user.name}</p>
                     <p className="truncate text-xs text-[#888]">
@@ -1282,7 +1348,7 @@ export const ChatsPage: React.FC = () => {
                   <p className="py-4 text-center text-sm text-[#8a8a8a]">Все найденные сотрудники уже участвуют в переписке.</p>
                 ) : availableParticipants.map((candidate) => (
                   <button key={candidate.id} type="button" className="flex w-full items-center gap-3 rounded-[10px] p-2.5 text-left hover:bg-[#f5f5f3]" onClick={() => void addParticipant(candidate.id)} disabled={participantSaving}>
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#eeeeeb] text-xs font-semibold text-[#555]">{getInitials(candidate.name)}</div>
+                    <UserAvatar name={candidate.name} avatar={candidate.avatar} className="h-9 w-9 bg-[#eeeeeb] text-xs text-[#555]" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[#292929]">{candidate.name}</p>
                       <p className="truncate text-xs text-[#888]">{candidate.position || candidate.email}</p>

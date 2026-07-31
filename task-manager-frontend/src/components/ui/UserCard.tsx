@@ -1,8 +1,10 @@
 import React from 'react';
 import { ProgressBar } from './ProgressBar';
+import { UserAvatar } from './UserAvatar';
 
 export const UserCard: React.FC<{
   name: string;
+  avatar?: string | null;
   role: string;
   done: number;
   total: number;
@@ -10,7 +12,7 @@ export const UserCard: React.FC<{
   skills?: string;
   isActive?: boolean;
   onClick?: () => void;
-}> = ({ name, role, done, total, extraTop, skills, isActive = true, onClick }) => {
+}> = ({ name, avatar, role, done, total, extraTop, skills, isActive = true, onClick }) => {
   const percent = Math.round((done / Math.max(1, total)) * 100);
   return (
     <button
@@ -20,9 +22,7 @@ export const UserCard: React.FC<{
       data-testid="team-user-card"
     >
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-full bg-[#2f2f2f] text-white flex items-center justify-center text-sm font-semibold">
-          {name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-        </div>
+        <UserAvatar name={name} avatar={avatar} className="h-11 w-11 bg-[#2f2f2f] text-sm text-white" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold text-[#1f1f1f]">{name}</p>

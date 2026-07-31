@@ -4,18 +4,21 @@ const {
 
 const USER_NAME_SELECT = {
     id: true,
-    name: true
+    name: true,
+    avatar: true
 };
 
 const USER_NAME_ROLE_SELECT = {
     id: true,
     name: true,
+    avatar: true,
     role: true
 };
 
 const USER_PUBLIC_SELECT = {
     id: true,
     name: true,
+    avatar: true,
     email: true,
     role: true,
     isActive: true,

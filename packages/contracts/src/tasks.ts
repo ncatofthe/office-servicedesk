@@ -11,6 +11,7 @@ import type { TaskReviewDto } from './reviews.js';
 export interface TaskAuthorDto {
   id: string;
   name: string;
+  avatar?: string | null;
   email: string;
   role: UserRole;
   position?: string | null;
@@ -22,6 +23,7 @@ export interface TaskAuthorDto {
 export interface TaskAssigneeUserDto {
   id: string;
   name: string;
+  avatar?: string | null;
   role: UserRole;
 }
 
@@ -35,6 +37,7 @@ export interface TaskAssigneeDto {
 export interface TaskCommentAuthorDto {
   id: string;
   name: string;
+  avatar?: string | null;
 }
 
 export interface TaskCommentDto {

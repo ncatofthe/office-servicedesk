@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usersApi } from '../api';
 import { getInitials, getRoleLabel } from '../utils';
 import { getProfileExtras, saveProfileExtras } from '../utils/profile-extras';
+import { prepareAvatarImage } from '../utils/avatar';
 
 const getDepartmentLabel = (user: NonNullable<ReturnType<typeof useAuth>['user']>) => {
   const primaryDepartmentName = user.primaryDepartment?.name?.trim();
@@ -50,7 +51,7 @@ export const ProfilePage: React.FC = () => {
     const extras = getProfileExtras(user.id);
     setName(user.name);
     setAbout(extras.about || '');
-    setAvatarDataUrl(extras.avatarDataUrl);
+    setAvatarDataUrl(user.avatar || extras.avatarDataUrl);
   }, [user]);
 
   const departmentLabel = useMemo(() => (user ? getDepartmentLabel(user) : 'Не указан'), [user]);
@@ -72,10 +73,11 @@ export const ProfilePage: React.FC = () => {
     setSaveMessage('');
 
     try {
-      if (trimmedName !== user.name) {
-        await usersApi.updateProfile(user.id, { name: trimmedName });
-        await refreshUser();
-      }
+      await usersApi.updateProfile(user.id, {
+        name: trimmedName,
+        avatar: avatarDataUrl || null,
+      });
+      await refreshUser();
 
       saveProfileExtras(user.id, {
         about,
@@ -126,17 +128,16 @@ export const ProfilePage: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const nextAvatarDataUrl = typeof reader.result === 'string' ? reader.result : undefined;
+    setError('');
+    try {
+      const nextAvatarDataUrl = await prepareAvatarImage(file);
       setAvatarDataUrl(nextAvatarDataUrl);
-      saveProfileExtras(user.id, {
-        about,
-        avatarDataUrl: nextAvatarDataUrl,
-      });
-      setSaveMessage('Аватар сохранён локально в браузере');
-    };
-    reader.readAsDataURL(file);
+      setSaveMessage('Нажмите «Сохранить», чтобы применить новый аватар.');
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : 'Не удалось обработать изображение.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   return (
@@ -173,15 +174,20 @@ export const ProfilePage: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={(event) => handleAvatarUpload(event.target.files)}
             />
             <button type="button" className="btn" onClick={() => fileInputRef.current?.click()}>
               Загрузить аватар
             </button>
+            {avatarDataUrl && (
+              <button type="button" className="btn" onClick={() => { setAvatarDataUrl(undefined); setSaveMessage('Нажмите «Сохранить», чтобы удалить аватар.'); }}>
+                Удалить аватар
+              </button>
+            )}
             <p className="max-w-[240px] text-xs text-[#8a8a8a]">
-              Аватар пока сохраняется только локально в текущем браузере.
+              JPG, PNG или WebP. Изображение автоматически обрежется до квадрата и будет видно коллегам.
             </p>
           </div>
         </div>
@@ -190,7 +196,7 @@ export const ProfilePage: React.FC = () => {
       <Card padding="lg" className="space-y-4">
         <div>
           <h3 className="text-lg font-semibold text-[#1f1f1f]">Основная информация</h3>
-          <p className="mt-1 text-sm text-[#6b6b6b]">Изменения имени сохраняются на сервере, поле «О себе» хранится локально.</p>
+            <p className="mt-1 text-sm text-[#6b6b6b]">Имя и аватар сохраняются на сервере, поле «О себе» пока хранится локально.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
