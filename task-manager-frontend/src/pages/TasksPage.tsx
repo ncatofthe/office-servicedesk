@@ -174,7 +174,12 @@ export const TasksPage: React.FC = () => {
   const [scope, setScope] = useState<QuickScope>('all');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const requestedStatus = searchParams.get('status');
+    return TASK_STATUS_OPTIONS.some((option) => option.value === requestedStatus)
+      ? requestedStatus || ''
+      : '';
+  });
   const [priorityFilter, setPriorityFilter] = useState('');
   const [folderFilter, setFolderFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -501,6 +506,20 @@ export const TasksPage: React.FC = () => {
     setSortBy('updated');
     setShowAdvancedFilters(false);
     setActionError('');
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('status');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  const updateStatusFilter = (value: string) => {
+    setStatusFilter(value);
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (value) {
+      nextSearchParams.set('status', value);
+    } else {
+      nextSearchParams.delete('status');
+    }
+    setSearchParams(nextSearchParams, { replace: true });
   };
 
   const handleCreate = async () => {
@@ -751,7 +770,7 @@ export const TasksPage: React.FC = () => {
             />
           </label>
 
-          <select className="input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <select className="input" value={statusFilter} onChange={(event) => updateStatusFilter(event.target.value)}>
             <option value="">Все статусы</option>
             {TASK_STATUS_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>

@@ -441,9 +441,7 @@ export const chatsApi = {
     const formData = new FormData();
     formData.append('file', file);
     if (content?.trim()) formData.append('content', content.trim());
-    return api.post<ChatMessage>(`/chats/${chatId}/attachments`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data);
+    return api.post<ChatMessage>(`/chats/${chatId}/attachments`, formData).then(r => r.data);
   },
   downloadAttachment: async (attachmentId: string, fileName?: string) => {
     const response = await api.get(`/chats/attachments/${attachmentId}/download`, { responseType: 'blob' });
@@ -456,6 +454,8 @@ export const chatsApi = {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(blobUrl);
   },
+  getAttachmentBlob: (attachmentId: string) =>
+    api.get<Blob>(`/chats/attachments/${attachmentId}/download`, { responseType: 'blob' }).then(r => r.data),
   updateMessage: (chatId: string, messageId: string, content: string) =>
     api.patch<ChatMessage>(`/chats/${chatId}/messages/${messageId}`, { content }).then(r => r.data),
   deleteMessage: (chatId: string, messageId: string) =>
@@ -477,9 +477,7 @@ export const filesApi = {
   uploadTaskFile: (taskId: string, file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    return api.post<TaskAttachment>(`/files/${taskId}`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data);
+    return api.post<TaskAttachment>(`/files/${taskId}`, formData).then(r => r.data);
   },
   getTaskFiles: (taskId: string) =>
     api.get<TaskAttachment[]>(`/files/${taskId}`).then(r => r.data),
@@ -496,6 +494,8 @@ export const filesApi = {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(blobUrl);
   },
+  getTaskFileBlob: (id: string) =>
+    api.get<Blob>(`/files/${id}/download`, { responseType: 'blob' }).then(r => r.data),
 };
 
 // Notifications API

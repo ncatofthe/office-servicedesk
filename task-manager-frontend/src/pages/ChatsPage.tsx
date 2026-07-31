@@ -32,6 +32,7 @@ import type {
   TaskAttachment,
   TaskComment,
   TaskSummary,
+  TaskTimelineEvent,
   TicketChatMember,
 } from '../types';
 
@@ -42,7 +43,8 @@ type ConversationItem =
   | { type: 'ticket'; id: string; timestamp: string; task: TaskSummary };
 type TicketTimelineItem =
   | { type: 'message'; id: string; createdAt: string; message: TaskComment }
-  | { type: 'file'; id: string; createdAt: string; file: TaskAttachment };
+  | { type: 'file'; id: string; createdAt: string; file: TaskAttachment }
+  | { type: 'event'; id: string; createdAt: string; event: TaskTimelineEvent };
 
 const FILTERS: Array<{ key: ChatFilter; label: string }> = [
   { key: 'all', label: 'Все чаты' },
@@ -78,6 +80,13 @@ const getStatusLabel = (status?: string) => ({
   DONE: 'Закрыта',
   MERGED: 'Объединена',
 }[String(status || '').toUpperCase()] || status || 'Заявка');
+
+const getPriorityLabel = (priority?: string) => ({
+  LOW: 'Низкий',
+  MEDIUM: 'Средний',
+  HIGH: 'Высокий',
+  URGENT: 'Срочный',
+}[String(priority || '').toUpperCase()] || priority || 'Не указан');
 
 const getDirectPeer = (chat: ChatThread, currentUserId?: string) =>
   chat.members.find((member) => member.userId !== currentUserId)?.user;
@@ -158,6 +167,69 @@ const formatConversationTime = (value: string) => {
   }).format(date);
 };
 
+const isImageAttachment = (filename: string, mimeType?: string | null) =>
+  Boolean(mimeType?.startsWith('image/')) || /\.(?:jpe?g|png|webp|gif)$/i.test(filename);
+
+const InlineImagePreview: React.FC<{
+  id: string;
+  filename: string;
+  source: 'chat' | 'ticket';
+  onOpen: (url: string, filename: string) => void;
+}> = ({ id, filename, source, onOpen }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(() => typeof IntersectionObserver === 'undefined');
+  const [imageUrl, setImageUrl] = useState('');
+  const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setIsVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '300px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    let active = true;
+    let objectUrl = '';
+    const load = source === 'chat'
+      ? chatsApi.getAttachmentBlob(id)
+      : filesApi.getTaskFileBlob(id);
+    void load.then((blob) => {
+      if (!active) return;
+      objectUrl = window.URL.createObjectURL(blob);
+      setImageUrl(objectUrl);
+    }).catch(() => {
+      if (active) setLoadError(true);
+    });
+    return () => {
+      active = false;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [id, isVisible, source]);
+
+  return (
+    <div ref={containerRef} className="min-h-[120px] min-w-[220px] overflow-hidden rounded-[12px] bg-black/5">
+      {imageUrl ? (
+        <button type="button" className="block w-full cursor-zoom-in" onClick={() => onOpen(imageUrl, filename)} title="Открыть изображение">
+          <img src={imageUrl} alt={filename} className="max-h-72 w-full object-contain" loading="lazy" />
+        </button>
+      ) : loadError ? (
+        <div className="flex min-h-[120px] items-center justify-center px-4 text-center text-xs text-[#8a6262]">Не удалось показать изображение</div>
+      ) : (
+        <div className="flex min-h-[120px] items-center justify-center text-xs text-[#8b9096]">Загружаем изображение…</div>
+      )}
+    </div>
+  );
+};
+
 export const ChatsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -171,6 +243,7 @@ export const ChatsPage: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [ticketMessages, setTicketMessages] = useState<TaskComment[]>([]);
   const [ticketFiles, setTicketFiles] = useState<TaskAttachment[]>([]);
+  const [ticketEvents, setTicketEvents] = useState<TaskTimelineEvent[]>([]);
   const [ticketMembers, setTicketMembers] = useState<TicketChatMember[]>([]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [filter, setFilter] = useState<ChatFilter>('all');
@@ -187,6 +260,7 @@ export const ChatsPage: React.FC = () => {
   const [participantSearch, setParticipantSearch] = useState('');
   const [creatingDirect, setCreatingDirect] = useState(false);
   const [participantSaving, setParticipantSaving] = useState(false);
+  const [imagePreview, setImagePreview] = useState<{ url: string; filename: string } | null>(null);
 
   const selectedChat = selection?.type === 'chat'
     ? threads.find((chat) => chat.id === selection.id) || null
@@ -240,14 +314,16 @@ export const ChatsPage: React.FC = () => {
           item.id === current.id ? { ...item, unreadCount: 0 } : item
         )));
       } else {
-        const [comments, files, members] = await Promise.all([
+        const [comments, files, members, events] = await Promise.all([
           commentsApi.getByTask(current.id),
           filesApi.getTaskFiles(current.id),
           chatsApi.getTicketMembers(current.id),
+          tasksApi.getTimeline(current.id),
         ]);
         setTicketMessages(comments);
         setTicketFiles(files);
         setTicketMembers(members);
+        setTicketEvents(events);
       }
       setError('');
     } catch (loadError) {
@@ -264,6 +340,7 @@ export const ChatsPage: React.FC = () => {
   useEffect(() => {
     setDraft('');
     setSelectedFile(null);
+    setImagePreview(null);
     if (selection) void loadConversation(selection, true);
   }, [loadConversation, selection]);
 
@@ -277,7 +354,7 @@ export const ChatsPage: React.FC = () => {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, ticketMessages, ticketFiles, messagesLoading]);
+  }, [messages, ticketMessages, ticketFiles, ticketEvents, messagesLoading]);
 
   const conversationItems = useMemo<ConversationItem[]>(() => {
     const normalized = search.trim().toLowerCase();
@@ -336,7 +413,15 @@ export const ChatsPage: React.FC = () => {
       createdAt: file.createdAt,
       file,
     })),
-  ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()), [ticketFiles, ticketMessages]);
+    ...ticketEvents
+      .filter((event) => !['COMMENT_ADDED', 'INTERNAL_NOTE_ADDED', 'FILE_ATTACHED'].includes(event.type))
+      .map((event) => ({
+        type: 'event' as const,
+        id: event.id,
+        createdAt: event.createdAt,
+        event,
+      })),
+  ].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()), [ticketEvents, ticketFiles, ticketMessages]);
 
   const currentMembers = selectedChat
     ? selectedChat.members.map((member) => ({ userId: member.userId, user: member.user, role: 'PARTICIPANT' as const }))
@@ -505,6 +590,34 @@ export const ChatsPage: React.FC = () => {
       ? `${getStatusLabel(selectedTicket.status)} · ${ticketMembers.length || 1} участников`
       : '';
   const canSend = selection?.type === 'chat' || user?.role !== 'VIEWER';
+  const ticketContextCard = selectedTicket ? (
+    <div className="mb-4 rounded-[14px] border border-[#d9dfe7] bg-white p-4 shadow-[0_5px_18px_rgba(35,40,46,0.05)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#68717d]">
+            <span>{getTaskNumber(selectedTicket)}</span>
+            <span className="rounded-full bg-[#edf1f6] px-2.5 py-1 text-[#40536c]">{getStatusLabel(selectedTicket.status)}</span>
+            <span>Приоритет: {getPriorityLabel(selectedTicket.priority)}</span>
+          </div>
+          <h3 className="mt-2 text-[15px] font-semibold text-[#24282e]">{selectedTicket.title}</h3>
+          {selectedTicket.description && (
+            <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-[#626972]">{selectedTicket.description}</p>
+          )}
+          <p className="mt-2 text-[11px] text-[#8b9097]">
+            Заявитель: {selectedTicket.author?.name || 'Не указан'} · Создана {formatDateTime(selectedTicket.createdAt)}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-[9px] border border-[#dfe2e6] px-3 text-xs font-medium text-[#4e5660] transition hover:bg-[#f4f5f6]"
+          onClick={() => navigate(`/tickets?taskId=${selectedTicket.id}`)}
+        >
+          <ExternalLink size={14} />
+          Открыть заявку
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   if (!loading && !settings.chatsEnabled) {
     return (
@@ -770,23 +883,40 @@ export const ChatsPage: React.FC = () => {
                                     {message.attachments?.length > 0 && (
                                       <div className={`${message.content ? 'mt-2' : ''} space-y-2`}>
                                         {message.attachments.map((attachment) => (
-                                          <button
-                                            key={attachment.id}
-                                            type="button"
-                                            className={`flex w-full min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
-                                              own ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[#e4e6e8] bg-[#f5f6f7] hover:bg-[#eef0f2]'
-                                            }`}
-                                            onClick={() => void downloadChatAttachment(attachment)}
-                                          >
-                                            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${own ? 'bg-white/15' : 'bg-white'}`}>
-                                              <FileText size={17} />
-                                            </span>
-                                            <span className="min-w-0 flex-1">
-                                              <span className="block truncate text-sm font-medium">{attachment.filename}</span>
-                                              <span className={`block text-[10px] ${own ? 'text-white/55' : 'text-[#929292]'}`}>{formatFileSize(attachment.sizeBytes)}</span>
-                                            </span>
-                                            <Download size={15} className="shrink-0 opacity-65" />
-                                          </button>
+                                          isImageAttachment(attachment.filename, attachment.mimeType) ? (
+                                            <div key={attachment.id} className={`min-w-[230px] rounded-[12px] border p-1.5 ${own ? 'border-white/20 bg-white/10' : 'border-[#e4e6e8] bg-[#f5f6f7]'}`}>
+                                              <InlineImagePreview
+                                                id={attachment.id}
+                                                filename={attachment.filename}
+                                                source="chat"
+                                                onOpen={(url, filename) => setImagePreview({ url, filename })}
+                                              />
+                                              <div className="flex items-center gap-2 px-2 py-1.5">
+                                                <span className="min-w-0 flex-1 truncate text-xs">{attachment.filename}</span>
+                                                <button type="button" className="rounded p-1 opacity-70 hover:bg-black/10 hover:opacity-100" onClick={() => void downloadChatAttachment(attachment)} title="Скачать">
+                                                  <Download size={14} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <button
+                                              key={attachment.id}
+                                              type="button"
+                                              className={`flex w-full min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
+                                                own ? 'border-white/20 bg-white/10 hover:bg-white/15' : 'border-[#e4e6e8] bg-[#f5f6f7] hover:bg-[#eef0f2]'
+                                              }`}
+                                              onClick={() => void downloadChatAttachment(attachment)}
+                                            >
+                                              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${own ? 'bg-white/15' : 'bg-white'}`}>
+                                                <FileText size={17} />
+                                              </span>
+                                              <span className="min-w-0 flex-1">
+                                                <span className="block truncate text-sm font-medium">{attachment.filename}</span>
+                                                <span className={`block text-[10px] ${own ? 'text-white/55' : 'text-[#929292]'}`}>{formatFileSize(attachment.sizeBytes)}</span>
+                                              </span>
+                                              <Download size={15} className="shrink-0 opacity-65" />
+                                            </button>
+                                          )
                                         ))}
                                       </div>
                                     )}
@@ -810,13 +940,19 @@ export const ChatsPage: React.FC = () => {
                       </div>
                     )
                   ) : ticketTimeline.length === 0 ? (
-                    <DataState variant="empty" message="В заявке пока нет сообщений и файлов. Ответ появится одновременно здесь и в карточке заявки." />
+                    <div className="mx-auto max-w-4xl">
+                      {ticketContextCard}
+                      <DataState variant="empty" message="В заявке пока нет сообщений, файлов и событий. Ответ появится одновременно здесь и в карточке заявки." />
+                    </div>
                   ) : (
                     <div className="mx-auto max-w-4xl space-y-1.5">
+                      {ticketContextCard}
                       {ticketTimeline.map((item, index) => {
                         const own = item.type === 'message'
                           ? item.message.authorId === user?.id
-                          : item.file.uploadedById === user?.id;
+                          : item.type === 'file'
+                            ? item.file.uploadedById === user?.id
+                            : false;
                         const showDay = index === 0 || !sameDay(ticketTimeline[index - 1]?.createdAt, item.createdAt);
                         return (
                           <React.Fragment key={`${item.type}:${item.id}`}>
@@ -827,38 +963,64 @@ export const ChatsPage: React.FC = () => {
                                 <span className="h-px flex-1 bg-[#dfe2e5]" />
                               </div>
                             )}
-                            <div className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
-                              <div className={`max-w-[86%] rounded-[17px] px-3.5 py-2.5 sm:max-w-[72%] ${
-                                own
-                                  ? 'rounded-br-[5px] bg-[#2d3c54] text-white shadow-[0_5px_14px_rgba(45,60,84,0.16)]'
-                                  : 'rounded-bl-[5px] border border-[#e0e3e6] bg-white text-[#292929] shadow-[0_3px_10px_rgba(35,40,46,0.05)]'
-                              }`}>
-                                {item.type === 'message' ? (
-                                  <>
-                                    {!own && <p className="mb-1 text-xs font-semibold text-[#696969]">{item.message.author?.name || 'Участник'}</p>}
-                                    <p className="whitespace-pre-wrap break-words text-sm leading-6">{item.message.content}</p>
-                                  </>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className={`flex min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
-                                      own ? 'border-white/20 bg-white/10' : 'border-[#e4e6e8] bg-[#f5f6f7]'
-                                    }`}
-                                    onClick={() => void filesApi.downloadTaskFile(item.file.id, item.file.filename)}
-                                  >
-                                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${own ? 'bg-white/15' : 'bg-white'}`}>
-                                      <FileText size={17} />
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block truncate text-sm font-medium">{item.file.filename}</span>
-                                      <span className={`block text-[10px] ${own ? 'text-white/55' : 'text-[#929292]'}`}>Вложение заявки</span>
-                                    </span>
-                                    <Download size={15} className="shrink-0 opacity-65" />
-                                  </button>
-                                )}
-                                <p className={`mt-1 text-right text-[10px] ${own ? 'text-white/55' : 'text-[#999]'}`}>{formatDateTime(item.createdAt)}</p>
+                            {item.type === 'event' ? (
+                              <div className="flex justify-center py-1">
+                                <div className="max-w-[92%] rounded-full border border-[#dfe3e8] bg-[#f1f3f5] px-3.5 py-2 text-center text-[11px] text-[#66707a]">
+                                  <span className="font-semibold text-[#48525d]">{item.event.title}</span>
+                                  {item.event.description && <span> · {item.event.description}</span>}
+                                  {item.event.actor?.name && <span> · {item.event.actor.name}</span>}
+                                  <span className="ml-1 text-[#969ca3]">{formatConversationTime(item.createdAt)}</span>
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              <div className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[86%] rounded-[17px] px-3.5 py-2.5 sm:max-w-[72%] ${
+                                  own
+                                    ? 'rounded-br-[5px] bg-[#2d3c54] text-white shadow-[0_5px_14px_rgba(45,60,84,0.16)]'
+                                    : 'rounded-bl-[5px] border border-[#e0e3e6] bg-white text-[#292929] shadow-[0_3px_10px_rgba(35,40,46,0.05)]'
+                                }`}>
+                                  {item.type === 'message' ? (
+                                    <>
+                                      {!own && <p className="mb-1 text-xs font-semibold text-[#696969]">{item.message.author?.name || 'Участник'}</p>}
+                                      <p className="whitespace-pre-wrap break-words text-sm leading-6">{item.message.content}</p>
+                                    </>
+                                  ) : isImageAttachment(item.file.filename) ? (
+                                    <div className={`min-w-[230px] rounded-[12px] border p-1.5 ${own ? 'border-white/20 bg-white/10' : 'border-[#e4e6e8] bg-[#f5f6f7]'}`}>
+                                      <InlineImagePreview
+                                        id={item.file.id}
+                                        filename={item.file.filename}
+                                        source="ticket"
+                                        onOpen={(url, filename) => setImagePreview({ url, filename })}
+                                      />
+                                      <div className="flex items-center gap-2 px-2 py-1.5">
+                                        <span className="min-w-0 flex-1 truncate text-xs">{item.file.filename}</span>
+                                        <button type="button" className="rounded p-1 opacity-70 hover:bg-black/10 hover:opacity-100" onClick={() => void filesApi.downloadTaskFile(item.file.id, item.file.filename)} title="Скачать">
+                                          <Download size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className={`flex min-w-[210px] items-center gap-3 rounded-[12px] border p-2.5 text-left ${
+                                        own ? 'border-white/20 bg-white/10' : 'border-[#e4e6e8] bg-[#f5f6f7]'
+                                      }`}
+                                      onClick={() => void filesApi.downloadTaskFile(item.file.id, item.file.filename)}
+                                    >
+                                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] ${own ? 'bg-white/15' : 'bg-white'}`}>
+                                        <FileText size={17} />
+                                      </span>
+                                      <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-medium">{item.file.filename}</span>
+                                        <span className={`block text-[10px] ${own ? 'text-white/55' : 'text-[#929292]'}`}>Вложение заявки</span>
+                                      </span>
+                                      <Download size={15} className="shrink-0 opacity-65" />
+                                    </button>
+                                  )}
+                                  <p className={`mt-1 text-right text-[10px] ${own ? 'text-white/55' : 'text-[#999]'}`}>{formatDateTime(item.createdAt)}</p>
+                                </div>
+                              </div>
+                            )}
                           </React.Fragment>
                         );
                       })}
@@ -932,6 +1094,28 @@ export const ChatsPage: React.FC = () => {
           </section>
         </div>
       </div>
+
+      <Modal
+        open={Boolean(imagePreview)}
+        onClose={() => setImagePreview(null)}
+        title={imagePreview?.filename || 'Просмотр изображения'}
+        size="wide"
+        testId="chat-image-preview-modal"
+      >
+        {imagePreview && (
+          <div className="space-y-3">
+            <div className="flex max-h-[72vh] items-center justify-center overflow-hidden rounded-[12px] bg-[#f2f3f4] p-2">
+              <img src={imagePreview.url} alt={imagePreview.filename} className="max-h-[70vh] max-w-full object-contain" />
+            </div>
+            <div className="flex justify-end">
+              <a className="btn inline-flex items-center gap-2" href={imagePreview.url} download={imagePreview.filename}>
+                <Download size={15} />
+                Скачать оригинал
+              </a>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={newChatOpen} onClose={() => !creatingDirect && setNewChatOpen(false)} title="Новый диалог" testId="new-direct-chat-modal">
         <div className="space-y-3">

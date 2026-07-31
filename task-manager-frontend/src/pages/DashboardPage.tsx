@@ -23,8 +23,9 @@ const KpiTile: React.FC<{
   progressLabel?: string;
   progress?: number;
   icon: React.ReactNode;
-}> = ({ title, value, deltaLabel, trend = 'up', progressLabel, progress, icon }) => (
-  <div className="relative overflow-hidden rounded-2xl border border-[#dedede] bg-white px-5 py-4 shadow-[0px_10px_30px_rgba(0,0,0,0.06)]">
+  to?: string;
+}> = ({ title, value, deltaLabel, trend = 'up', progressLabel, progress, icon, to }) => {
+  const content = <>
     <div className="flex items-start justify-between">
       <div>
         <p className="text-sm text-[#6b6b6b]">{title}</p>
@@ -53,8 +54,15 @@ const KpiTile: React.FC<{
         </div>
       </div>
     )}
-  </div>
-);
+  </>;
+  const className = `relative overflow-hidden rounded-2xl border border-[#dedede] bg-white px-5 py-4 shadow-[0px_10px_30px_rgba(0,0,0,0.06)] ${
+    to ? 'block transition hover:-translate-y-0.5 hover:border-[#b9b9b9] hover:shadow-[0px_14px_34px_rgba(0,0,0,0.09)]' : ''
+  }`;
+
+  return to
+    ? <Link to={to} className={className}>{content}</Link>
+    : <div className={className}>{content}</div>;
+};
 
 const SectionCard: React.FC<{
   title: string;
@@ -213,11 +221,11 @@ export const DashboardPage: React.FC = () => {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {[
-            { label: 'Ожидают обработки', value: newTasks.length, helper: 'Команда ещё не взяла их в работу', icon: <TimerReset size={19} /> },
-            { label: 'Сейчас в работе', value: inProgressTasks.length, helper: 'Исполнитель занимается вопросом', icon: <Clock size={19} /> },
-            { label: 'Решено', value: completedTasks.length, helper: 'Закрытые обращения', icon: <CheckCircle2 size={19} /> },
+            { label: 'Ожидают обработки', value: newTasks.length, helper: 'Команда ещё не взяла их в работу', icon: <TimerReset size={19} />, to: '/tickets?status=NEW' },
+            { label: 'Сейчас в работе', value: inProgressTasks.length, helper: 'Исполнитель занимается вопросом', icon: <Clock size={19} />, to: '/tickets?status=IN_PROGRESS' },
+            { label: 'Решено', value: completedTasks.length, helper: 'Закрытые обращения', icon: <CheckCircle2 size={19} />, to: '/tickets?status=DONE' },
           ].map((item) => (
-            <div key={item.label} className="rounded-[16px] border border-[#dedede] bg-white p-4 shadow-[0_8px_24px_rgba(0,0,0,0.04)]">
+            <Link key={item.label} to={item.to} className="rounded-[16px] border border-[#dedede] bg-white p-4 shadow-[0_8px_24px_rgba(0,0,0,0.04)] transition hover:-translate-y-0.5 hover:border-[#b9b9b9] hover:shadow-[0_12px_28px_rgba(0,0,0,0.08)]">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-[#4f4f4f]">{item.label}</p>
@@ -226,7 +234,7 @@ export const DashboardPage: React.FC = () => {
                 <span className="rounded-[12px] bg-[#eeeeee] p-2.5 text-[#353535]">{item.icon}</span>
               </div>
               <p className="mt-3 text-xs leading-5 text-[#8a8a8a]">{item.helper}</p>
-            </div>
+            </Link>
           ))}
         </div>
 
@@ -318,6 +326,7 @@ export const DashboardPage: React.FC = () => {
           progressLabel="Доля новых заявок"
           progress={pendingProgress}
           icon={<TimerReset size={20} />}
+          to="/tickets?status=NEW"
         />
         <KpiTile
           title="В работе"
@@ -326,6 +335,7 @@ export const DashboardPage: React.FC = () => {
           progressLabel="Доля заявок в работе"
           progress={inProgressProgress}
           icon={<Clock size={20} />}
+          to="/tickets?status=IN_PROGRESS"
         />
         <KpiTile
           title="Закрытые"
@@ -334,6 +344,7 @@ export const DashboardPage: React.FC = () => {
           progressLabel="Доля закрытых заявок"
           progress={completedProgress}
           icon={<TrendingUp size={20} />}
+          to="/tickets?status=DONE"
         />
         <KpiTile
           title="Рейтинг выполнения"

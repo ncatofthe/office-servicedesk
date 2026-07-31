@@ -175,6 +175,42 @@ const mergeMetadataModeLabels = {
 const formatRuDateTime = (value: string) =>
   new Date(value).toLocaleString('ru-RU');
 
+const isImageFilename = (filename: string) => /\.(?:jpe?g|png|webp|gif)$/i.test(filename);
+
+const TaskAttachmentImage: React.FC<{ id: string; filename: string }> = ({ id, filename }) => {
+  const [imageUrl, setImageUrl] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    void filesApi.getTaskFileBlob(id).then((blob) => {
+      if (!active) return;
+      objectUrl = window.URL.createObjectURL(blob);
+      setImageUrl(objectUrl);
+    }).catch(() => undefined);
+
+    return () => {
+      active = false;
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    };
+  }, [id]);
+
+  return imageUrl ? (
+    <button
+      type="button"
+      className="shrink-0 cursor-zoom-in overflow-hidden rounded-[8px] border border-[#dedede] bg-[#f5f5f5]"
+      onClick={() => window.open(imageUrl, '_blank', 'noopener,noreferrer')}
+      title="Открыть изображение"
+    >
+      <img src={imageUrl} alt={filename} className="h-20 w-28 object-cover" loading="lazy" />
+    </button>
+  ) : (
+    <div className="flex h-20 w-28 shrink-0 items-center justify-center rounded-[8px] border border-[#e4e4e4] bg-[#f7f7f7] text-[11px] text-[#999]">
+      Загрузка…
+    </div>
+  );
+};
+
 const requesterStatusCopy: Record<TaskStatus, { title: string; description: string }> = {
   NEW: {
     title: 'Заявка получена',
@@ -1192,12 +1228,12 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[12px] border border-dashed border-[#d7d7d7] bg-[#fcfcfc] px-4 py-3 text-sm text-[#6b6b6b]">
+                    <div className="order-3 rounded-[12px] border border-dashed border-[#d7d7d7] bg-[#fcfcfc] px-4 py-3 text-sm text-[#6b6b6b]">
                       Для вашей роли доступен только просмотр публичной переписки.
                     </div>
                   )}
 
-                  {!isRequesterView && isFeatureEnabled('knowledge') && <div className="order-4 rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3">
+                  {!isRequesterView && isFeatureEnabled('knowledge') && <div className="order-6 rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3">
                     <div className="flex items-center gap-2">
                       <BookOpen size={16} className="text-[#5f5f5f]" />
                       <p className="text-sm font-semibold text-[#1f1f1f]">База знаний</p>
@@ -1252,14 +1288,16 @@ export const TaskDetailsModal: React.FC<Props> = ({
                   </div>}
 
                   {canUseCannedReplies && isFeatureEnabled('cannedReplies') && taskId && (
-                    <CannedReplyPicker
-                      taskId={taskId}
-                      disabled={loading || commentSaving || taskSaving || taskDeleting}
-                      onApplied={(message) => refreshTaskAndMergeInfo(message)}
-                    />
+                    <div className="order-4">
+                      <CannedReplyPicker
+                        taskId={taskId}
+                        disabled={loading || commentSaving || taskSaving || taskDeleting}
+                        onApplied={(message) => refreshTaskAndMergeInfo(message)}
+                      />
+                    </div>
                   )}
 
-                  {!isRequesterView && isFeatureEnabled('email') && <div className="rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3" data-testid="task-email-thread">
+                  {!isRequesterView && isFeatureEnabled('email') && <div className="order-5 rounded-[12px] border border-[#e3e3e3] bg-[#fcfcfc] p-4 space-y-3" data-testid="task-email-thread">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
@@ -1673,13 +1711,16 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     <div className="space-y-1">
                       {task.attachments?.map((a) => (
                         <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#e3e3e3] bg-white px-3 py-2">
-                          <button
-                            type="button"
-                            className="text-sm text-[#3a3a3a] underline"
-                            onClick={() => downloadAttachment(a.id, a.filename)}
-                          >
-                            {a.filename}
-                          </button>
+                          <div className="flex min-w-0 items-center gap-3">
+                            {isImageFilename(a.filename) && <TaskAttachmentImage id={a.id} filename={a.filename} />}
+                            <button
+                              type="button"
+                              className="min-w-0 break-all text-left text-sm text-[#3a3a3a] underline"
+                              onClick={() => downloadAttachment(a.id, a.filename)}
+                            >
+                              {a.filename}
+                            </button>
+                          </div>
                           {(isAdmin || a.uploadedById === user?.id) && (
                             <button
                               type="button"
