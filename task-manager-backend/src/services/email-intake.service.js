@@ -30,6 +30,7 @@ const getEmailIntakeConfig = () => ({
     user: process.env.EMAIL_IMAP_USER,
     password: process.env.EMAIL_IMAP_PASSWORD,
     mailbox: process.env.EMAIL_INTAKE_MAILBOX || 'INBOX',
+    startUid: parseIntegerEnv('EMAIL_INTAKE_START_UID', 1, 1),
     maxMessages: parseIntegerEnv('EMAIL_INTAKE_MAX_MESSAGES', 30, 1),
     pollIntervalMs: parseIntegerEnv('EMAIL_INTAKE_POLL_INTERVAL_MS', 300000, 60000),
     attachmentMaxBytes: parseIntegerEnv('EMAIL_ATTACHMENT_MAX_BYTES', 25 * 1024 * 1024, 1),
@@ -428,6 +429,14 @@ const syncEmailInbox = async(options = {}) => {
 
         for await (const message of client.fetch(range, { uid: true, source: true, envelope: true })) {
             totalScanned += 1;
+            if (message.uid < config.startUid) {
+                skipped.push({
+                    skipped: true,
+                    reason: 'before_start_uid',
+                    uid: message.uid
+                });
+                continue;
+            }
             try {
                 const result = await parseAndProcessRawMessage(message.source, {
                     mailbox: config.mailbox,

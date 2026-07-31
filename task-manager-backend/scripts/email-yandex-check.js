@@ -141,6 +141,7 @@ const main = async() => {
             secure: imap.secure,
             userMasked: maskValue(imap.user),
             mailbox: imap.mailbox,
+            startUid: imap.startUid,
             maxMessages: imap.maxMessages
         }),
         smtp: buildCheck('SMTP outbound', [
