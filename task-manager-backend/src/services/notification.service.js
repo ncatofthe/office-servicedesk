@@ -18,6 +18,8 @@ const TASK_NOTIFICATION_SELECT = {
     ticketNumber: true,
     title: true,
     status: true,
+    description: true,
+    priority: true,
     folderId: true,
     authorId: true,
     author: {
@@ -64,7 +66,8 @@ const renderTemplate = (template, variables) => String(template || '').replace(/
 const notificationVariables = (task, extra = {}) => {
     const config = getNotificationConfig();
     const url = buildTaskLink(task, config);
-    return { ticketNumber: task?.ticketNumber || '', title: task?.title || '', status: task?.status || '',
+    return { ticketNumber: task?.ticketNumber || '', title: task?.title || '', status: task?.status || '', priority: task?.priority || '',
+        description: task?.description || '',
         requesterName: task?.author?.name || task?.author?.email || 'пользователь', portalUrl: url || '',
         portalLink: url ? `Открыть заявку: ${url}` : '', ...extra };
 };
@@ -77,6 +80,16 @@ const queueRequesterTemplate = async(task, kind, extra = {}, db = prisma) => {
     const variables = notificationVariables(task, extra);
     return queueOutboundEmail({ taskId: task.id, actorId: null, to: task.author.email, recipientName: task.author.name || null,
         subject: renderTemplate(settings[`${prefix}SubjectTemplate`], variables), text: renderTemplate(settings[`${prefix}BodyTemplate`], variables) }, { db });
+};
+
+const queueAssigneeNotification = async(task, assignee, db = prisma) => {
+    const settings = emailSettingsService.getRuntimeEmailSettings();
+    if (!settings.notificationsEnabled || !settings.notifyAssigneeAssigned || !assignee?.email
+        || !(await productSettingsService.isFeatureEnabled('email', db))) return null;
+    const variables = notificationVariables(task, { assigneeName: assignee.name || assignee.email });
+    return queueOutboundEmail({ taskId: task.id, actorId: null, to: assignee.email, recipientName: assignee.name || null,
+        subject: renderTemplate(settings.assigneeSubjectTemplate, variables),
+        text: renderTemplate(settings.assigneeBodyTemplate, variables) }, { db });
 };
 
 const parseLimit = (value) => {
@@ -540,6 +553,7 @@ const notifyTaskAssigned = async(taskId, assigneeUserId, actor, options = {}) =>
         },
         db
     });
+    await queueAssigneeNotification(task, recipient, db);
     if (task.author?.id !== actor?.id) await queueRequesterTemplate(task, 'Assigned', { assigneeName: recipient.name || recipient.email }, db);
     return results;
 };

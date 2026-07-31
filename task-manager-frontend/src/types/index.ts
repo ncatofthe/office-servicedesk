@@ -623,9 +623,10 @@ export interface EmailSettingsAdmin {
   outboundEnabled: boolean; smtpHost: string; smtpPort: number; smtpSecure: boolean; smtpUser?: string | null; smtpPasswordConfigured: boolean;
   fromAddress?: string | null; fromName: string; workerEnabled: boolean; workerIntervalMs: number; workerBatchSize: number; lockTtlMs: number;
   maxAttempts: number; retryDelayMinutes: number; notificationsEnabled: boolean; notifyRequesterCreated: boolean; notifyRequesterComment: boolean;
-  notifyRequesterStatus: boolean; notifyRequesterAssigned: boolean; portalBaseUrl?: string | null;
+  notifyRequesterStatus: boolean; notifyRequesterAssigned: boolean; notifyAssigneeAssigned: boolean; portalBaseUrl?: string | null;
   createdSubjectTemplate: string; createdBodyTemplate: string; commentSubjectTemplate: string; commentBodyTemplate: string;
   statusSubjectTemplate: string; statusBodyTemplate: string; assignedSubjectTemplate: string; assignedBodyTemplate: string;
+  assigneeSubjectTemplate: string; assigneeBodyTemplate: string;
 }
 
 export type UpdateEmailSettingsInput = Partial<EmailSettingsAdmin> & { imapPassword?: string; smtpPassword?: string; clearImapPassword?: boolean; clearSmtpPassword?: boolean };

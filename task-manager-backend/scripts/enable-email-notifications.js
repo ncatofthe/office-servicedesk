@@ -6,7 +6,8 @@ settingsService.loadEmailSettings()
         notificationsEnabled: true,
         notifyRequesterCreated: true,
         notifyRequesterComment: true,
-        notifyRequesterStatus: true
+        notifyRequesterStatus: true,
+        notifyAssigneeAssigned: true
     }))
     .then(() => process.exit(0))
     .catch((error) => {

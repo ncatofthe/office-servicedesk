@@ -329,7 +329,7 @@ model EmailSettings {
   mailbox                  String   @default("INBOX")
   intakeStartUid           Int      @default(1)
   intakeMaxMessages        Int      @default(30)
-  intakePollIntervalMs     Int      @default(300000)
+  intakePollIntervalMs     Int      @default(15000)
   attachmentMaxBytes       Int      @default(26214400)
   defaultFolderId          String?
   defaultEntityId          String?
@@ -354,6 +354,7 @@ model EmailSettings {
   notifyRequesterComment   Boolean  @default(true)
   notifyRequesterStatus    Boolean  @default(true)
   notifyRequesterAssigned  Boolean  @default(false)
+  notifyAssigneeAssigned   Boolean  @default(true)
   portalBaseUrl            String?
   createdSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
   createdBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
@@ -363,6 +364,8 @@ model EmailSettings {
   statusBodyTemplate       String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
   assignedSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
   assignedBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
+  assigneeSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}")
+  assigneeBodyTemplate     String   @default("Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

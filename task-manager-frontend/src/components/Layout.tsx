@@ -169,6 +169,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationsDrawerOpen, setNotificationsDrawerOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
@@ -178,6 +179,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [markingAllRead, setMarkingAllRead] = useState(false);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDetailsElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const [avatarDataUrl, setAvatarDataUrl] = useState<string | undefined>(() => getProfileExtras(user?.id).avatarDataUrl);
 
@@ -293,6 +295,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         setProfileMenuOpen(false);
       }
 
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+
       if (drawerRef.current && !drawerRef.current.contains(event.target as Node)) {
         const target = event.target as HTMLElement;
         if (target.dataset.notificationDrawerOverlay === 'true') {
@@ -302,12 +308,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     };
 
     window.addEventListener(PROFILE_EXTRAS_UPDATED_EVENT, handleProfileExtrasUpdated as EventListener);
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreMenuOpen(false);
+    };
     document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
     return () => {
       window.removeEventListener(PROFILE_EXTRAS_UPDATED_EVENT, handleProfileExtrasUpdated as EventListener);
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    setMoreMenuOpen(false);
+  }, [location.pathname, location.search]);
 
   const openNotifications = async () => {
     if (window.matchMedia('(max-width: 639px)').matches) {
@@ -423,7 +438,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   );
               })}
               {secondaryNavItems.length > 0 && (
-                <details className="group relative shrink-0">
+                <details
+                  ref={moreMenuRef}
+                  open={moreMenuOpen}
+                  onToggle={(event) => setMoreMenuOpen(event.currentTarget.open)}
+                  className="group relative shrink-0"
+                >
                   <summary className={`flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-[9px] px-2.5 text-[13px] font-medium transition-colors [&::-webkit-details-marker]:hidden ${
                     secondaryNavItems.some((item) => isNavItemActive(item.path))
                       ? 'bg-[#292929] text-white'
@@ -437,6 +457,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       <Link
                         key={item.path}
                         to={item.path}
+                        onClick={() => setMoreMenuOpen(false)}
                         className={`flex h-10 items-center rounded-[9px] px-3 text-sm font-medium ${
                           isNavItemActive(item.path)
                             ? 'bg-[#f0f0ee] text-[#222]'

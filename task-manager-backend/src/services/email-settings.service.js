@@ -16,7 +16,7 @@ const envSettings = () => ({
     imapPort: int(process.env.EMAIL_IMAP_PORT, 993), imapSecure: bool(process.env.EMAIL_IMAP_SECURE, true),
     imapUser: process.env.EMAIL_IMAP_USER || null, imapPassword: process.env.EMAIL_IMAP_PASSWORD || null,
     mailbox: process.env.EMAIL_INTAKE_MAILBOX || 'INBOX', intakeStartUid: int(process.env.EMAIL_INTAKE_START_UID, 1),
-    intakeMaxMessages: int(process.env.EMAIL_INTAKE_MAX_MESSAGES, 30), intakePollIntervalMs: int(process.env.EMAIL_INTAKE_POLL_INTERVAL_MS, 300000, 60000),
+    intakeMaxMessages: int(process.env.EMAIL_INTAKE_MAX_MESSAGES, 30), intakePollIntervalMs: int(process.env.EMAIL_INTAKE_POLL_INTERVAL_MS, 15000, 5000),
     attachmentMaxBytes: int(process.env.EMAIL_ATTACHMENT_MAX_BYTES, 26214400), defaultFolderId: process.env.EMAIL_DEFAULT_FOLDER_ID || null,
     defaultEntityId: process.env.EMAIL_DEFAULT_ENTITY_ID || null, defaultTypeId: process.env.EMAIL_DEFAULT_TYPE_ID || null, defaultSubtypeId: process.env.EMAIL_DEFAULT_SUBTYPE_ID || null,
     outboundEnabled: bool(process.env.EMAIL_OUTBOUND_ENABLED), smtpHost: process.env.EMAIL_SMTP_HOST || 'smtp.yandex.ru',
@@ -28,6 +28,7 @@ const envSettings = () => ({
     maxAttempts: int(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS, 5), retryDelayMinutes: int(process.env.EMAIL_OUTBOUND_RETRY_DELAY_MINUTES, 15),
     notificationsEnabled: bool(process.env.EMAIL_NOTIFICATIONS_ENABLED), notifyRequesterCreated: true, notifyRequesterComment: true,
     notifyRequesterStatus: true, notifyRequesterAssigned: false, portalBaseUrl: process.env.PORTAL_BASE_URL || null,
+    notifyAssigneeAssigned: true,
     createdSubjectTemplate: '[Заявка #{{ticketNumber}}] Заявка принята: {{title}}',
     createdBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}',
     commentSubjectTemplate: '[Заявка #{{ticketNumber}}] Новый ответ: {{title}}',
@@ -35,7 +36,9 @@ const envSettings = () => ({
     statusSubjectTemplate: '[Заявка #{{ticketNumber}}] Статус изменён: {{status}}',
     statusBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}',
     assignedSubjectTemplate: '[Заявка #{{ticketNumber}}] Назначен исполнитель',
-    assignedBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}'
+    assignedBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}',
+    assigneeSubjectTemplate: '[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}',
+    assigneeBodyTemplate: 'Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}'
 });
 
 let cached = envSettings();
@@ -67,7 +70,7 @@ const publicSettings = (settings = cached) => {
     return { ...safe, imapPasswordConfigured: Boolean(imapPassword), smtpPasswordConfigured: Boolean(smtpPassword) };
 };
 
-const editable = ['intakeEnabled','imapHost','imapPort','imapSecure','imapUser','mailbox','intakeStartUid','intakeMaxMessages','intakePollIntervalMs','attachmentMaxBytes','defaultFolderId','defaultEntityId','defaultTypeId','defaultSubtypeId','outboundEnabled','smtpHost','smtpPort','smtpSecure','smtpUser','fromAddress','fromName','workerEnabled','workerIntervalMs','workerBatchSize','lockTtlMs','maxAttempts','retryDelayMinutes','notificationsEnabled','notifyRequesterCreated','notifyRequesterComment','notifyRequesterStatus','notifyRequesterAssigned','portalBaseUrl','createdSubjectTemplate','createdBodyTemplate','commentSubjectTemplate','commentBodyTemplate','statusSubjectTemplate','statusBodyTemplate','assignedSubjectTemplate','assignedBodyTemplate'];
+const editable = ['intakeEnabled','imapHost','imapPort','imapSecure','imapUser','mailbox','intakeStartUid','intakeMaxMessages','intakePollIntervalMs','attachmentMaxBytes','defaultFolderId','defaultEntityId','defaultTypeId','defaultSubtypeId','outboundEnabled','smtpHost','smtpPort','smtpSecure','smtpUser','fromAddress','fromName','workerEnabled','workerIntervalMs','workerBatchSize','lockTtlMs','maxAttempts','retryDelayMinutes','notificationsEnabled','notifyRequesterCreated','notifyRequesterComment','notifyRequesterStatus','notifyRequesterAssigned','notifyAssigneeAssigned','portalBaseUrl','createdSubjectTemplate','createdBodyTemplate','commentSubjectTemplate','commentBodyTemplate','statusSubjectTemplate','statusBodyTemplate','assignedSubjectTemplate','assignedBodyTemplate','assigneeSubjectTemplate','assigneeBodyTemplate'];
 const updateEmailSettings = async(payload, db = prisma) => {
     const current = cached || envSettings(); const persisted = await db.emailSettings.findUnique({ where: { id: SETTINGS_ID } });
     const data = persisted ? {} : Object.fromEntries(editable.map((name) => [name, current[name]]));

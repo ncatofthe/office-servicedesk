@@ -17,7 +17,8 @@ settingsService.loadEmailSettings()
                 created: settings.notifyRequesterCreated,
                 comment: settings.notifyRequesterComment,
                 status: settings.notifyRequesterStatus,
-                assigned: settings.notifyRequesterAssigned
+                assigned: settings.notifyRequesterAssigned,
+                assigneeAssigned: settings.notifyAssigneeAssigned
             },
             imapPasswordConfigured: settings.imapPasswordConfigured,
             smtpPasswordConfigured: settings.smtpPasswordConfigured,
