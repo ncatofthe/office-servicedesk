@@ -14,7 +14,11 @@ if (!hasRequiredEnv) {
     const app = require('../src/app.js');
     const prisma = require('../src/prisma/prisma.js');
     const { createTestUser, loginUser } = require('../test-support/auth-test-utils.cjs');
-    const { getProductSettings } = require('../src/services/product-settings.service.js');
+    const {
+        FEATURE_COLUMN_MAP,
+        FEATURE_KEYS,
+        getProductSettings
+    } = require('../src/services/product-settings.service.js');
 
     after(async() => {
         await prisma.$disconnect();
@@ -24,6 +28,7 @@ if (!hasRequiredEnv) {
         const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const password = 'password123';
         const initialSettings = await getProductSettings();
+        const allFeaturesEnabled = Object.fromEntries(FEATURE_KEYS.map((feature) => [feature, true]));
 
         const admin = await createTestUser(prisma, {
             email: `settings-admin-${runId}@example.com`,
@@ -54,7 +59,11 @@ if (!hasRequiredEnv) {
                     locale: initialSettings.locale,
                     timezone: initialSettings.timezone,
                     defaultPriority: initialSettings.defaultPriority,
-                    defaultFolderId: initialSettings.defaultFolderId
+                    defaultFolderId: initialSettings.defaultFolderId,
+                    ...Object.values(FEATURE_COLUMN_MAP).reduce((features, column) => ({
+                        ...features,
+                        [column]: initialSettings[column]
+                    }), {})
                 }
             });
             await prisma.task.deleteMany({ where: { title: { contains: runId } } });
@@ -77,7 +86,8 @@ if (!hasRequiredEnv) {
                 locale: 'ru-RU',
                 timezone: 'Europe/Moscow',
                 defaultPriority: 'HIGH',
-                defaultFolderId: activeFolder.id
+                defaultFolderId: activeFolder.id,
+                features: allFeaturesEnabled
             })
             .expect(200);
 
@@ -101,11 +111,31 @@ if (!hasRequiredEnv) {
             defaultFolder: {
                 id: activeFolder.id,
                 name: activeFolder.name
-            }
+            },
+            features: allFeaturesEnabled
         });
         assert.equal(Object.prototype.hasOwnProperty.call(publicSettings.body, 'id'), false);
         assert.equal(Object.prototype.hasOwnProperty.call(publicSettings.body, 'createdAt'), false);
         assert.equal(Object.prototype.hasOwnProperty.call(publicSettings.body, 'updatedAt'), false);
+
+        await request(app)
+            .patch('/api/servicedesk/admin/product-settings')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ features: { tickets: false } })
+            .expect(200);
+
+        const disabledSettings = await request(app)
+            .get('/api/servicedesk/admin/product-settings')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .expect(200);
+        assert.equal(disabledSettings.body.features.tickets, false);
+
+        const restoredSettings = await request(app)
+            .patch('/api/servicedesk/admin/product-settings')
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ features: { tickets: true } })
+            .expect(200);
+        assert.equal(restoredSettings.body.features.tickets, true);
 
         await request(app)
             .get('/api/servicedesk/admin/product-settings')

@@ -153,10 +153,12 @@ router.get('/service-desk/ticket-subtypes', ...authenticated, controller.listAct
 router.get('/service-desk/entities', ...authenticated, controller.listActiveEntities);
 router.get('/service-desk/teams', ...authenticated, controller.listActiveTeams);
 
+// This control-plane endpoint intentionally has no feature middleware: it is
+// the recovery path for re-enabling every optional module.
 router.get('/servicedesk/admin/product-settings', ...adminOnly, controller.getAdminProductSettings);
 router.patch(
     '/servicedesk/admin/product-settings',
-    ...freshdeskAdminOnly,
+    ...adminOnly,
     updateProductSettingsValidation,
     validate,
     controller.updateProductSettings
