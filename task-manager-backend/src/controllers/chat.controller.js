@@ -8,6 +8,7 @@ const sendError = (res, error) => {
     if (
         error.message === 'Можно редактировать только свои сообщения.'
         || error.message === 'Можно удалять только свои сообщения.'
+        || error.message === 'Переименовать или удалить чат может только его создатель или администратор.'
     ) {
         return res.status(403).json({ error: error.message });
     }
@@ -60,6 +61,22 @@ const listUsers = async(req, res) => {
 const createDirect = async(req, res) => {
     try {
         res.status(201).json(await chatService.createDirect(req.user, req.body.userId));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const updateThread = async(req, res) => {
+    try {
+        res.json(await chatService.updateThread(req.params.chatId, req.user, req.body));
+    } catch (error) {
+        sendError(res, error);
+    }
+};
+
+const deleteThread = async(req, res) => {
+    try {
+        res.json(await chatService.deleteThread(req.params.chatId, req.user));
     } catch (error) {
         sendError(res, error);
     }
@@ -212,6 +229,8 @@ module.exports = {
     list,
     listUsers,
     createDirect,
+    updateThread,
+    deleteThread,
     addMember,
     removeMember,
     listTicketMembers,

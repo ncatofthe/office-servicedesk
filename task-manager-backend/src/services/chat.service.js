@@ -161,7 +161,7 @@ const getDirectKey = (firstUserId, secondUserId) => [firstUserId, secondUserId].
 const assertMembership = async(chatId, userId) => {
     const membership = await prisma.chatMember.findUnique({
         where: { chatId_userId: { chatId, userId } },
-        include: { chat: { select: { kind: true } } }
+        include: { chat: { select: { kind: true, createdById: true } } }
     });
 
     if (!membership) {
@@ -250,6 +250,7 @@ const serializeThread = async(chat, actorId) => {
     return {
         id: chat.id,
         kind: chat.kind,
+        createdById: chat.createdById || null,
         title: chat.kind === 'DEPARTMENT'
             ? (chat.department?.name || chat.title || 'Отдел')
             : (chat.title || null),
@@ -382,6 +383,38 @@ const loadThread = async(chatId, actorId) => {
     });
     if (!chat) throw new Error('Chat not found');
     return serializeThread(chat, actorId);
+};
+
+const assertThreadManagementAccess = async(chatId, actor) => {
+    const membership = await assertMembership(chatId, actor.id);
+    if (membership.chat.kind === 'DEPARTMENT') {
+        throw new Error('Системный чат отдела нельзя переименовать или удалить.');
+    }
+    if (actor.role !== 'ADMIN' && membership.chat.createdById !== actor.id) {
+        throw new Error('Переименовать или удалить чат может только его создатель или администратор.');
+    }
+    return membership.chat;
+};
+
+const updateThread = async(chatId, actor, payload = {}) => {
+    await assertThreadManagementAccess(chatId, actor);
+    if (!Object.prototype.hasOwnProperty.call(payload, 'title') || typeof payload.title !== 'string') {
+        throw new Error('Укажите название чата.');
+    }
+    const title = payload.title.trim();
+    if (title.length > 80) {
+        throw new Error('Название чата не должно превышать 80 символов.');
+    }
+    await prisma.chatThread.update({
+        where: { id: chatId },
+        data: { title: title || null, updatedAt: new Date() }
+    });
+    return loadThread(chatId, actor.id);
+};
+
+const deleteThread = async(chatId, actor) => {
+    await assertThreadManagementAccess(chatId, actor);
+    return deleteAdmin(chatId);
 };
 
 const addMember = async(chatId, actor, targetUserId) => {
@@ -753,7 +786,7 @@ const listAdmin = async({ search = '', kind = '' } = {}) => {
         kind: chat.kind,
         title: chat.kind === 'DEPARTMENT'
             ? (chat.department?.name || chat.title || 'Отдел')
-            : chat.members.map((member) => member.user.name).join(' ↔ '),
+            : (chat.title || chat.members.map((member) => member.user.name).join(' ↔ ')),
         department: chat.department,
         members: chat.members.map((member) => ({ userId: member.userId, user: member.user })),
         memberCount: chat._count.members,
@@ -815,6 +848,8 @@ module.exports = {
     list,
     listUsers,
     createDirect,
+    updateThread,
+    deleteThread,
     addMember,
     removeMember,
     listTicketMembers,

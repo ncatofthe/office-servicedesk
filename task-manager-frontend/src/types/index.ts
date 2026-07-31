@@ -213,6 +213,7 @@ export interface ChatThread {
   id: string;
   kind: ChatKind;
   title?: string | null;
+  createdById?: string | null;
   department?: {
     id: string;
     name: string;

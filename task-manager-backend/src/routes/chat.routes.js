@@ -35,6 +35,13 @@ router.post(
     validate,
     chatController.createDirect
 );
+router.patch(
+    '/:chatId',
+    body('title').isString().isLength({ max: 80 }).withMessage('Название чата не должно превышать 80 символов.'),
+    validate,
+    chatController.updateThread
+);
+router.delete('/:chatId', chatController.deleteThread);
 router.post(
     '/:chatId/members',
     body('userId').isString().notEmpty().withMessage('Выберите пользователя.'),

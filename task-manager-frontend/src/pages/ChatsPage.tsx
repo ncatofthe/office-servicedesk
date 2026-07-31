@@ -12,6 +12,7 @@ import {
   Send,
   Settings2,
   Ticket,
+  Trash2,
   UserPlus,
   UserRound,
   Users,
@@ -102,7 +103,7 @@ const getChatTitle = (chat: ChatThread, currentUserId?: string) => {
       .slice(0, 3)
       .join(', ') || 'Групповой чат';
   }
-  return getDirectPeer(chat, currentUserId)?.name || 'Личный чат';
+  return chat.title || getDirectPeer(chat, currentUserId)?.name || 'Личный чат';
 };
 
 const getChatKindLabel = (chat: ChatThread) => ({
@@ -260,6 +261,8 @@ export const ChatsPage: React.FC = () => {
   const [participantSearch, setParticipantSearch] = useState('');
   const [creatingDirect, setCreatingDirect] = useState(false);
   const [participantSaving, setParticipantSaving] = useState(false);
+  const [threadSaving, setThreadSaving] = useState(false);
+  const [chatTitle, setChatTitle] = useState('');
   const [imagePreview, setImagePreview] = useState<{ url: string; filename: string } | null>(null);
 
   const selectedChat = selection?.type === 'chat'
@@ -268,6 +271,11 @@ export const ChatsPage: React.FC = () => {
   const selectedTicket = selection?.type === 'ticket'
     ? tickets.find((task) => task.id === selection.id) || null
     : null;
+  const canManageSelectedChat = Boolean(
+    selectedChat
+    && selectedChat.kind !== 'DEPARTMENT'
+    && (user?.role === 'ADMIN' || selectedChat.createdById === user?.id)
+  );
 
   const loadLists = useCallback(async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -426,7 +434,6 @@ export const ChatsPage: React.FC = () => {
   const currentMembers = selectedChat
     ? selectedChat.members.map((member) => ({ userId: member.userId, user: member.user, role: 'PARTICIPANT' as const }))
     : ticketMembers;
-  const currentMemberIds = new Set(currentMembers.map((member) => member.userId));
 
   const availableUsers = useMemo(() => {
     const normalized = userSearch.trim().toLowerCase();
@@ -439,12 +446,15 @@ export const ChatsPage: React.FC = () => {
 
   const availableParticipants = useMemo(() => {
     const normalized = participantSearch.trim().toLowerCase();
+    const currentMemberIds = new Set(
+      (selectedChat ? selectedChat.members : ticketMembers).map((member) => member.userId)
+    );
     return users.filter((candidate) => !currentMemberIds.has(candidate.id) && (!normalized || [
       candidate.name,
       candidate.email,
       candidate.position || '',
     ].some((value) => value.toLowerCase().includes(normalized))));
-  }, [currentMemberIds, participantSearch, users]);
+  }, [participantSearch, selectedChat, ticketMembers, users]);
 
   const startDirect = async (targetUserId: string) => {
     setCreatingDirect(true);
@@ -498,6 +508,45 @@ export const ChatsPage: React.FC = () => {
       setError(getApiError(removeError, 'Не удалось удалить участника.'));
     } finally {
       setParticipantSaving(false);
+    }
+  };
+
+  const openConversationSettings = () => {
+    setChatTitle(selectedChat?.title || '');
+    setMembersOpen(true);
+  };
+
+  const saveChatTitle = async () => {
+    if (!selectedChat || !canManageSelectedChat || threadSaving) return;
+    setThreadSaving(true);
+    setError('');
+    try {
+      const updated = await chatsApi.updateThread(selectedChat.id, chatTitle);
+      setThreads((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setChatTitle(updated.title || '');
+    } catch (updateError) {
+      setError(getApiError(updateError, 'Не удалось сохранить название чата.'));
+    } finally {
+      setThreadSaving(false);
+    }
+  };
+
+  const deleteSelectedChat = async () => {
+    if (!selectedChat || !canManageSelectedChat || threadSaving) return;
+    const title = getChatTitle(selectedChat, user?.id);
+    if (!window.confirm(`Удалить чат «${title}» вместе со всей историей и вложениями? Это действие нельзя отменить.`)) return;
+    setThreadSaving(true);
+    setError('');
+    try {
+      await chatsApi.deleteThread(selectedChat.id);
+      setThreads((current) => current.filter((item) => item.id !== selectedChat.id));
+      setMembersOpen(false);
+      setSelection(null);
+      setMessages([]);
+    } catch (deleteError) {
+      setError(getApiError(deleteError, 'Не удалось удалить чат.'));
+    } finally {
+      setThreadSaving(false);
     }
   };
 
@@ -824,12 +873,24 @@ export const ChatsPage: React.FC = () => {
                   <button
                     type="button"
                     className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]"
-                    onClick={() => setMembersOpen(true)}
+                    onClick={openConversationSettings}
                     title="Настройки переписки"
                   >
                     <Settings2 size={16} />
                     <span className="hidden lg:inline">Настройки</span>
                   </button>
+                  {canManageSelectedChat && (
+                    <button
+                      type="button"
+                      className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#9d4444] transition hover:bg-[#fff0f0] hover:text-[#862e2e]"
+                      onClick={() => void deleteSelectedChat()}
+                      disabled={threadSaving}
+                      title="Удалить чат"
+                    >
+                      <Trash2 size={15} />
+                      <span className="hidden xl:inline">Удалить</span>
+                    </button>
+                  )}
                   {selectedTicket && (
                     <button type="button" className="inline-flex h-9 items-center gap-2 rounded-[9px] px-2.5 text-xs font-medium text-[#555] transition hover:bg-[#f1f1ef] hover:text-[#222]" onClick={() => navigate(`/tickets?taskId=${selectedTicket.id}`)}>
                       <ExternalLink size={15} />
@@ -1140,8 +1201,38 @@ export const ChatsPage: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal open={membersOpen} onClose={() => !participantSaving && setMembersOpen(false)} title="Участники переписки" testId="chat-members-modal">
+      <Modal open={membersOpen} onClose={() => !participantSaving && !threadSaving && setMembersOpen(false)} title="Настройки переписки" testId="chat-members-modal">
         <div className="space-y-4">
+          {selectedChat && selectedChat.kind !== 'DEPARTMENT' && (
+            <div className="rounded-[12px] border border-[#e3e3e3] bg-[#f8f8f7] p-4">
+              <label htmlFor="chat-title" className="text-sm font-semibold text-[#292929]">Название чата</label>
+              <p className="mt-1 text-xs leading-5 text-[#858585]">
+                Особенно удобно для бесед с несколькими участниками. Пустое название вернёт автоматический список имён.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <input
+                  id="chat-title"
+                  className="input min-w-0 flex-1"
+                  value={chatTitle}
+                  onChange={(event) => setChatTitle(event.target.value.slice(0, 80))}
+                  placeholder="Например: Запуск нового офиса"
+                  disabled={!canManageSelectedChat || threadSaving}
+                  maxLength={80}
+                />
+                {canManageSelectedChat && (
+                  <button type="button" className="btn btn-primary shrink-0" onClick={() => void saveChatTitle()} disabled={threadSaving}>
+                    {threadSaving ? 'Сохраняем…' : 'Сохранить'}
+                  </button>
+                )}
+              </div>
+              {!canManageSelectedChat && (
+                <p className="mt-2 text-xs text-[#8a8a8a]">Название может менять создатель беседы или администратор.</p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-[#292929]">Участники</p>
           <div className="space-y-2">
             {currentMembers.map((member) => {
               const canRemoveInternal = selectedChat?.kind === 'GROUP'
@@ -1167,6 +1258,7 @@ export const ChatsPage: React.FC = () => {
                 </div>
               );
             })}
+          </div>
           </div>
 
           {selectedChat?.kind === 'DEPARTMENT' ? (
@@ -1200,6 +1292,21 @@ export const ChatsPage: React.FC = () => {
                 ))}
               </div>
             </>
+          )}
+
+          {selectedChat && canManageSelectedChat && (
+            <div className="border-t border-[#eadada] pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-[11px] border border-[#f0cece] bg-[#fff6f6] p-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#923b3b]">Удалить чат</p>
+                  <p className="mt-1 text-xs text-[#a56a6a]">История сообщений и все вложения будут удалены без возможности восстановления.</p>
+                </div>
+                <button type="button" className="btn inline-flex items-center gap-2 border-[#e5baba] text-[#a23636] hover:bg-[#ffeaea]" onClick={() => void deleteSelectedChat()} disabled={threadSaving}>
+                  <Trash2 size={15} />
+                  Удалить чат
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </Modal>
