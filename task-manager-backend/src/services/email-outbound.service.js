@@ -347,11 +347,13 @@ const createOutboxBaseRecord = async({
     taskId,
     commentId,
     actorId,
+    dedupeKey,
     payload,
     dryRun
 }) => {
     return db.emailOutboundMessage.create({
         data: {
+            dedupeKey: dedupeKey || null,
             taskId,
             commentId: commentId || null,
             recipientEmail: payload.to,
@@ -497,6 +499,7 @@ const queueOutboundEmail = async(payloadInput, options = {}) => {
         ...(options.config || {})
     };
     const taskId = String(payloadInput?.taskId || '').trim();
+    const dedupeKey = String(payloadInput?.dedupeKey || '').trim() || null;
     if (!taskId) {
         throw new Error('taskId обязателен для записи email в outbox.');
     }
@@ -518,14 +521,37 @@ const queueOutboundEmail = async(payloadInput, options = {}) => {
         throw new Error('Текст email обязателен.');
     }
 
-    const outbox = await createOutboxBaseRecord({
-        db,
-        taskId,
-        commentId: payloadInput?.commentId || null,
-        actorId: payloadInput?.actorId || null,
-        payload,
-        dryRun: !config.enabled
-    });
+    if (dedupeKey) {
+        const existing = await db.emailOutboundMessage.findUnique({
+            where: { dedupeKey }
+        });
+        if (existing) {
+            return buildGenericOutboxResult(existing);
+        }
+    }
+
+    let outbox;
+    try {
+        outbox = await createOutboxBaseRecord({
+            db,
+            taskId,
+            commentId: payloadInput?.commentId || null,
+            actorId: payloadInput?.actorId || null,
+            dedupeKey,
+            payload,
+            dryRun: !config.enabled
+        });
+    } catch (error) {
+        if (dedupeKey && error?.code === 'P2002') {
+            const existing = await db.emailOutboundMessage.findUnique({
+                where: { dedupeKey }
+            });
+            if (existing) {
+                return buildGenericOutboxResult(existing);
+            }
+        }
+        throw error;
+    }
 
     if (!config.enabled) {
         return buildGenericOutboxResult(outbox);

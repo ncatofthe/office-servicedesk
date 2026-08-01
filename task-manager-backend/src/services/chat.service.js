@@ -1,4 +1,5 @@
 const prisma = require('../prisma/prisma.js');
+const { Prisma } = require('@prisma/client');
 const fs = require('fs');
 const path = require('path');
 const { uploadsDir } = require('../middlewares/upload.middleware.js');
@@ -21,6 +22,19 @@ const CHAT_USER_SELECT = {
 };
 
 const CHAT_SETTINGS_ID = 'default';
+const CHAT_SETTINGS_CACHE_TTL_MS = Math.max(
+    0,
+    Number(process.env.CHAT_SETTINGS_CACHE_TTL_MS || 30_000)
+);
+const DEPARTMENT_SYNC_TTL_MS = Math.max(
+    0,
+    Number(process.env.CHAT_DEPARTMENT_SYNC_TTL_MS || 60_000)
+);
+let cachedChatSettings = null;
+let chatSettingsCacheExpiresAt = 0;
+let chatSettingsLoadPromise = null;
+const departmentSyncExpiresAt = new Map();
+const departmentSyncPromises = new Map();
 const CHAT_SETTINGS_DEFAULTS = {
     chatsEnabled: true,
     directChatsEnabled: true,
@@ -34,7 +48,7 @@ const CHAT_MESSAGE_INCLUDE = {
     attachments: { orderBy: { createdAt: 'asc' } }
 };
 
-const getSettings = async(db = prisma) => {
+const loadSettings = async(db) => {
     const existing = await db.chatSettings.findUnique({ where: { id: CHAT_SETTINGS_ID } });
     if (existing) return existing;
     try {
@@ -45,6 +59,41 @@ const getSettings = async(db = prisma) => {
         if (error.code !== 'P2002') throw error;
         return db.chatSettings.findUniqueOrThrow({ where: { id: CHAT_SETTINGS_ID } });
     }
+};
+
+const canUseSettingsCache = (db) => (
+    db === prisma
+    && process.env.NODE_ENV !== 'test'
+    && CHAT_SETTINGS_CACHE_TTL_MS > 0
+);
+
+const cacheSettings = (settings) => {
+    cachedChatSettings = settings;
+    chatSettingsCacheExpiresAt = Date.now() + CHAT_SETTINGS_CACHE_TTL_MS;
+    return settings;
+};
+
+const invalidateSettingsCache = () => {
+    cachedChatSettings = null;
+    chatSettingsCacheExpiresAt = 0;
+    chatSettingsLoadPromise = null;
+};
+
+const getSettings = async(db = prisma) => {
+    if (!canUseSettingsCache(db)) {
+        return loadSettings(db);
+    }
+    if (cachedChatSettings && Date.now() < chatSettingsCacheExpiresAt) {
+        return cachedChatSettings;
+    }
+    if (!chatSettingsLoadPromise) {
+        chatSettingsLoadPromise = loadSettings(db)
+            .then(cacheSettings)
+            .finally(() => {
+                chatSettingsLoadPromise = null;
+            });
+    }
+    return chatSettingsLoadPromise;
 };
 
 const updateSettings = async(payload = {}) => {
@@ -82,7 +131,7 @@ const updateSettings = async(payload = {}) => {
     }
 
     await getSettings();
-    return prisma.$transaction(async(tx) => {
+    const settings = await prisma.$transaction(async(tx) => {
         if (Object.prototype.hasOwnProperty.call(data, 'chatsEnabled')) {
             await productSettingsService.getProductSettings(tx);
             await tx.productSettings.update({
@@ -96,6 +145,8 @@ const updateSettings = async(payload = {}) => {
             data
         });
     });
+    productSettingsService.invalidateProductSettingsCache();
+    return cacheSettings(settings);
 };
 
 const normalizeContent = (content, { allowEmpty = false } = {}) => {
@@ -226,28 +277,55 @@ const syncDepartmentThread = async(departmentId, actorId) => {
 };
 
 const ensureActorDepartmentThreads = async(actorId) => {
-    const memberships = await prisma.userDepartment.findMany({
-        where: {
-            userId: actorId,
-            user: { isActive: true },
-            department: { isActive: true }
-        },
-        select: { departmentId: true }
+    if (DEPARTMENT_SYNC_TTL_MS > 0 && (departmentSyncExpiresAt.get(actorId) || 0) > Date.now()) {
+        return;
+    }
+    const existingSync = departmentSyncPromises.get(actorId);
+    if (existingSync) {
+        return existingSync;
+    }
+
+    const syncPromise = (async() => {
+        const memberships = await prisma.userDepartment.findMany({
+            where: {
+                userId: actorId,
+                user: { isActive: true },
+                department: { isActive: true }
+            },
+            select: { departmentId: true }
+        });
+
+        await Promise.all(memberships.map(({ departmentId }) => syncDepartmentThread(departmentId, actorId)));
+        departmentSyncExpiresAt.set(actorId, Date.now() + DEPARTMENT_SYNC_TTL_MS);
+    })().finally(() => {
+        departmentSyncPromises.delete(actorId);
     });
 
-    await Promise.all(memberships.map(({ departmentId }) => syncDepartmentThread(departmentId, actorId)));
+    departmentSyncPromises.set(actorId, syncPromise);
+    return syncPromise;
 };
 
-const serializeThread = async(chat, actorId) => {
-    const membership = chat.members.find((member) => member.userId === actorId);
+const getUnreadCounts = async(actorId, chatIds) => {
+    if (chatIds.length === 0) return new Map();
+    const rows = await prisma.$queryRaw`
+        SELECT membership."chatId" AS "chatId", COUNT(message."id")::integer AS "unreadCount"
+        FROM "chat_members" AS membership
+        LEFT JOIN "chat_messages" AS message
+          ON message."chatId" = membership."chatId"
+         AND message."authorId" <> ${actorId}
+         AND (
+           membership."lastReadAt" IS NULL
+           OR message."createdAt" > membership."lastReadAt"
+         )
+        WHERE membership."userId" = ${actorId}
+          AND membership."chatId" IN (${Prisma.join(chatIds)})
+        GROUP BY membership."chatId"
+    `;
+    return new Map(rows.map((row) => [row.chatId, row.unreadCount]));
+};
+
+const serializeThread = (chat, unreadCount = 0) => {
     const lastMessage = chat.messages[0] || null;
-    const unreadCount = await prisma.chatMessage.count({
-        where: {
-            chatId: chat.id,
-            authorId: { not: actorId },
-            ...(membership?.lastReadAt ? { createdAt: { gt: membership.lastReadAt } } : {})
-        }
-    });
 
     return {
         id: chat.id,
@@ -302,7 +380,8 @@ const list = async(actor) => {
         orderBy: { updatedAt: 'desc' }
     });
 
-    return Promise.all(chats.map((chat) => serializeThread(chat, actor.id)));
+    const unreadCounts = await getUnreadCounts(actor.id, chats.map((chat) => chat.id));
+    return chats.map((chat) => serializeThread(chat, unreadCounts.get(chat.id) || 0));
 };
 
 const listUsers = async(actorId) => prisma.user.findMany({
@@ -365,7 +444,8 @@ const createDirect = async(actor, targetUserId) => {
         }
     });
 
-    return serializeThread(fullChat, actor.id);
+    const unreadCounts = await getUnreadCounts(actor.id, [fullChat.id]);
+    return serializeThread(fullChat, unreadCounts.get(fullChat.id) || 0);
 };
 
 const loadThread = async(chatId, actorId) => {
@@ -385,7 +465,8 @@ const loadThread = async(chatId, actorId) => {
         }
     });
     if (!chat) throw new Error('Chat not found');
-    return serializeThread(chat, actorId);
+    const unreadCounts = await getUnreadCounts(actorId, [chat.id]);
+    return serializeThread(chat, unreadCounts.get(chat.id) || 0);
 };
 
 const assertThreadManagementAccess = async(chatId, actor) => {
@@ -762,14 +843,8 @@ const getUnreadCount = async(actor) => {
         },
         select: { chatId: true, lastReadAt: true }
     });
-    const counts = await Promise.all(memberships.map((membership) => prisma.chatMessage.count({
-        where: {
-            chatId: membership.chatId,
-            authorId: { not: actor.id },
-            ...(membership.lastReadAt ? { createdAt: { gt: membership.lastReadAt } } : {})
-        }
-    })));
-    return counts.reduce((sum, count) => sum + count, 0);
+    const unreadCounts = await getUnreadCounts(actor.id, memberships.map((membership) => membership.chatId));
+    return [...unreadCounts.values()].reduce((sum, count) => sum + count, 0);
 };
 
 const listAdmin = async({ search = '', kind = '' } = {}) => {
@@ -861,6 +936,7 @@ const deleteAdmin = async(chatId) => {
 
 module.exports = {
     getSettings,
+    invalidateSettingsCache,
     updateSettings,
     list,
     listUsers,

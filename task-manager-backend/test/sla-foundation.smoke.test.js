@@ -218,6 +218,12 @@ if (!hasRequiredEnv) {
         assert.ok(afterReply.sla.firstResponseAt);
         assert.equal(afterReply.sla.firstResponseStatus, 'MET');
 
+        await request(app)
+            .post(`/api/tasks/${createdTask.id}/assignees`)
+            .set('Authorization', `Bearer ${adminToken}`)
+            .send({ userId: admin.id })
+            .expect(201);
+
         const closedTask = (await request(app)
             .patch(`/api/tasks/${createdTask.id}/status`)
             .set('Authorization', `Bearer ${adminToken}`)

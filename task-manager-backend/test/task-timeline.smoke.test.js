@@ -158,6 +158,12 @@ if (!hasRequiredEnv) {
             .expect(201)).body;
 
         await request(app)
+            .post(`/api/tasks/${task.id}/assignees`)
+            .set('Authorization', `Bearer ${tokens.agent}`)
+            .send({ userId: agent.id })
+            .expect(201);
+
+        await request(app)
             .patch(`/api/tasks/${task.id}/status`)
             .set('Authorization', `Bearer ${tokens.agent}`)
             .send({ status: 'IN_PROGRESS' })
@@ -178,12 +184,6 @@ if (!hasRequiredEnv) {
                 content: 'Внутренняя заметка для исполнителей.',
                 visibility: 'INTERNAL'
             })
-            .expect(201);
-
-        await request(app)
-            .post(`/api/tasks/${task.id}/assignees`)
-            .set('Authorization', `Bearer ${tokens.admin}`)
-            .send({ userId: agent.id })
             .expect(201);
 
         await request(app)

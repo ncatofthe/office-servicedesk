@@ -167,7 +167,7 @@ model User {
   taskTimelineEvents           TaskTimelineEvent[]    @relation("TaskTimelineActor")
   knowledgeArticlesCreated     KnowledgeArticle[]     @relation("KnowledgeArticleCreatedBy")
   knowledgeArticlesUpdated     KnowledgeArticle[]     @relation("KnowledgeArticleUpdatedBy")
-  chatThreadsCreated           ChatThread[]            @relation("ChatThreadCreatedBy")
+  chatThreadsCreated           ChatThread[]           @relation("ChatThreadCreatedBy")
   chatMemberships              ChatMember[]
   chatMessages                 ChatMessage[]
   taskChatParticipations       TaskChatParticipant[]
@@ -210,56 +210,56 @@ model UserDepartment {
 }
 
 model Task {
-  id                     String                  @id @default(cuid())
-  ticketNumber           Int                     @unique @default(autoincrement()) @map("ticket_number")
-  title                  String
-  description            String?
-  status                 TaskStatus              @default(NEW)
-  priority               TaskPriority            @default(MEDIUM)
-  sourceChannel          TaskSourceChannel       @default(WEB)
-  startDate              DateTime?
-  dueDate                DateTime?
-  progress               Int                     @default(0)
-  department             Department?             @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  departmentId           String?
-  folder                 TicketFolder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  folderId               String?
-  entity                 TicketEntity?           @relation(fields: [entityId], references: [id], onDelete: SetNull)
-  entityId               String?
-  type                   TicketType?             @relation(fields: [typeId], references: [id], onDelete: SetNull)
-  typeId                 String?
-  subtype                TicketSubtype?          @relation(fields: [subtypeId], references: [id], onDelete: SetNull)
-  subtypeId              String?
-  slaPolicy              SlaPolicy?              @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
-  slaPolicyId            String?
-  firstResponseDueAt     DateTime?
-  resolutionDueAt        DateTime?
-  firstResponseAt        DateTime?
-  resolvedAt             DateTime?
-  slaFirstResponseStatus SlaTimerStatus?
-  slaResolutionStatus    SlaTimerStatus?
-  author                 User                    @relation("TaskAuthor", fields: [authorId], references: [id])
-  authorId               String
-  assignees              TaskAssignee[]
-  comments               TaskComment[]
-  attachments            TaskAttachment[]
-  reviews                TaskReview[]
-  notifications          Notification[]
-  history                TaskHistory[]
-  transactions           Transaction[]
-  mergeMasterLinks       TaskMerge[]             @relation("TaskMergeMaster")
-  mergeChildLinks        TaskMerge[]             @relation("TaskMergeChild")
-  closeApprovals         TaskCloseApproval[]
-  requesterCloseRequired Boolean                 @default(false)
-  requesterCloseApprovedAt DateTime?
+  id                         String                  @id @default(cuid())
+  ticketNumber               Int                     @unique @default(autoincrement()) @map("ticket_number")
+  title                      String
+  description                String?
+  status                     TaskStatus              @default(NEW)
+  priority                   TaskPriority            @default(MEDIUM)
+  sourceChannel              TaskSourceChannel       @default(WEB)
+  startDate                  DateTime?
+  dueDate                    DateTime?
+  progress                   Int                     @default(0)
+  department                 Department?             @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentId               String?
+  folder                     TicketFolder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folderId                   String?
+  entity                     TicketEntity?           @relation(fields: [entityId], references: [id], onDelete: SetNull)
+  entityId                   String?
+  type                       TicketType?             @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  typeId                     String?
+  subtype                    TicketSubtype?          @relation(fields: [subtypeId], references: [id], onDelete: SetNull)
+  subtypeId                  String?
+  slaPolicy                  SlaPolicy?              @relation(fields: [slaPolicyId], references: [id], onDelete: SetNull)
+  slaPolicyId                String?
+  firstResponseDueAt         DateTime?
+  resolutionDueAt            DateTime?
+  firstResponseAt            DateTime?
+  resolvedAt                 DateTime?
+  slaFirstResponseStatus     SlaTimerStatus?
+  slaResolutionStatus        SlaTimerStatus?
+  author                     User                    @relation("TaskAuthor", fields: [authorId], references: [id])
+  authorId                   String
+  assignees                  TaskAssignee[]
+  comments                   TaskComment[]
+  attachments                TaskAttachment[]
+  reviews                    TaskReview[]
+  notifications              Notification[]
+  history                    TaskHistory[]
+  transactions               Transaction[]
+  mergeMasterLinks           TaskMerge[]             @relation("TaskMergeMaster")
+  mergeChildLinks            TaskMerge[]             @relation("TaskMergeChild")
+  closeApprovals             TaskCloseApproval[]
+  requesterCloseRequired     Boolean                 @default(false)
+  requesterCloseApprovedAt   DateTime?
   requesterCloseApprovedById String?
-  emailInboundMessages   EmailInboundMessage[]
-  emailOutboundMessages  EmailOutboundMessage[]
-  externalReferences     TaskExternalReference[]
-  timelineEvents         TaskTimelineEvent[]
-  chatParticipants       TaskChatParticipant[]
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  emailInboundMessages       EmailInboundMessage[]
+  emailOutboundMessages      EmailOutboundMessage[]
+  externalReferences         TaskExternalReference[]
+  timelineEvents             TaskTimelineEvent[]
+  chatParticipants           TaskChatParticipant[]
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
 
   @@index([departmentId])
   @@index([folderId])
@@ -267,108 +267,111 @@ model Task {
   @@index([typeId])
   @@index([subtypeId])
   @@index([slaPolicyId])
+  @@index([updatedAt])
+  @@index([status, updatedAt])
+  @@index([authorId, updatedAt])
   @@map("tasks")
 }
 
 model TicketFolder {
-  id                 String              @id @default(cuid())
-  name               String              @unique
-  description        String?
-  isActive           Boolean             @default(true)
-  tasks              Task[]
-  types              TicketType[]
-  subtypes           TicketSubtype[]
-  teams              SupportTeam[]
-  teamAccesses       SupportTeamFolder[]
-  slaPolicies        SlaPolicy[]
-  productSettings    ProductSettings[]    @relation("ProductSettingsDefaultFolder")
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  id              String              @id @default(cuid())
+  name            String              @unique
+  description     String?
+  isActive        Boolean             @default(true)
+  tasks           Task[]
+  types           TicketType[]
+  subtypes        TicketSubtype[]
+  teams           SupportTeam[]
+  teamAccesses    SupportTeamFolder[]
+  slaPolicies     SlaPolicy[]
+  productSettings ProductSettings[]   @relation("ProductSettingsDefaultFolder")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@map("ticket_folders")
 }
 
 model ProductSettings {
-  id                String         @id @default("default")
-  portalName        String         @default("Office ServiceDesk")
-  companyName       String         @default("")
-  welcomeMessage    String?
-  locale            String         @default("ru-RU")
-  timezone          String         @default("Europe/Moscow")
-  defaultPriority   TaskPriority   @default(MEDIUM)
-  dashboardEnabled  Boolean        @default(true)
-  ticketsEnabled    Boolean        @default(true)
-  ticketCreationEnabled Boolean     @default(true)
-  queueEnabled      Boolean        @default(true)
-  knowledgeEnabled  Boolean        @default(true)
-  cannedRepliesEnabled Boolean      @default(true)
-  chatsEnabled      Boolean        @default(true)
-  teamEnabled       Boolean        @default(true)
-  reportsEnabled    Boolean        @default(true)
-  notificationsEnabled Boolean      @default(true)
-  automationEnabled Boolean        @default(true)
-  emailEnabled      Boolean        @default(true)
-  taskAttachmentsEnabled Boolean    @default(true)
-  freshdeskImportEnabled Boolean    @default(true)
-  defaultFolder     TicketFolder?  @relation("ProductSettingsDefaultFolder", fields: [defaultFolderId], references: [id], onDelete: Restrict)
-  defaultFolderId   String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                     String        @id @default("default")
+  portalName             String        @default("Office ServiceDesk")
+  companyName            String        @default("")
+  welcomeMessage         String?
+  locale                 String        @default("ru-RU")
+  timezone               String        @default("Europe/Moscow")
+  defaultPriority        TaskPriority  @default(MEDIUM)
+  dashboardEnabled       Boolean       @default(true)
+  ticketsEnabled         Boolean       @default(true)
+  ticketCreationEnabled  Boolean       @default(true)
+  queueEnabled           Boolean       @default(true)
+  knowledgeEnabled       Boolean       @default(true)
+  cannedRepliesEnabled   Boolean       @default(true)
+  chatsEnabled           Boolean       @default(true)
+  teamEnabled            Boolean       @default(true)
+  reportsEnabled         Boolean       @default(true)
+  notificationsEnabled   Boolean       @default(true)
+  automationEnabled      Boolean       @default(true)
+  emailEnabled           Boolean       @default(true)
+  taskAttachmentsEnabled Boolean       @default(true)
+  freshdeskImportEnabled Boolean       @default(true)
+  defaultFolder          TicketFolder? @relation("ProductSettingsDefaultFolder", fields: [defaultFolderId], references: [id], onDelete: Restrict)
+  defaultFolderId        String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
   @@index([defaultFolderId])
   @@map("product_settings")
 }
 
 model EmailSettings {
-  id                       String   @id @default("default")
-  intakeEnabled            Boolean  @default(false)
-  imapHost                 String   @default("imap.yandex.ru")
-  imapPort                 Int      @default(993)
-  imapSecure               Boolean  @default(true)
-  imapUser                 String?
-  imapPasswordEncrypted    String?
-  mailbox                  String   @default("INBOX")
-  intakeStartUid           Int      @default(1)
-  intakeMaxMessages        Int      @default(30)
-  intakePollIntervalMs     Int      @default(15000)
-  attachmentMaxBytes       Int      @default(26214400)
-  defaultFolderId          String?
-  defaultEntityId          String?
-  defaultTypeId            String?
-  defaultSubtypeId         String?
-  outboundEnabled          Boolean  @default(false)
-  smtpHost                 String   @default("smtp.yandex.ru")
-  smtpPort                 Int      @default(465)
-  smtpSecure               Boolean  @default(true)
-  smtpUser                 String?
-  smtpPasswordEncrypted    String?
-  fromAddress              String?
-  fromName                 String   @default("Office ServiceDesk")
-  workerEnabled            Boolean  @default(true)
-  workerIntervalMs         Int      @default(60000)
-  workerBatchSize          Int      @default(20)
-  lockTtlMs                Int      @default(300000)
-  maxAttempts              Int      @default(5)
-  retryDelayMinutes        Int      @default(15)
-  notificationsEnabled     Boolean  @default(true)
-  notifyRequesterCreated   Boolean  @default(true)
-  notifyRequesterComment   Boolean  @default(true)
-  notifyRequesterStatus    Boolean  @default(true)
-  notifyRequesterAssigned  Boolean  @default(false)
-  notifyAssigneeAssigned   Boolean  @default(true)
-  portalBaseUrl            String?
-  createdSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
-  createdBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
-  commentSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Новый ответ: {{title}}")
-  commentBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} появился новый ответ.\n\n{{comment}}\n\n{{portalLink}}")
-  statusSubjectTemplate    String   @default("[Заявка #{{ticketNumber}}] Статус изменён: {{status}}")
-  statusBodyTemplate       String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
-  assignedSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
-  assignedBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
-  assigneeSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}")
-  assigneeBodyTemplate     String   @default("Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String   @id @default("default")
+  intakeEnabled           Boolean  @default(false)
+  imapHost                String   @default("imap.yandex.ru")
+  imapPort                Int      @default(993)
+  imapSecure              Boolean  @default(true)
+  imapUser                String?
+  imapPasswordEncrypted   String?
+  mailbox                 String   @default("INBOX")
+  intakeStartUid          Int      @default(1)
+  intakeMaxMessages       Int      @default(30)
+  intakePollIntervalMs    Int      @default(15000)
+  attachmentMaxBytes      Int      @default(26214400)
+  defaultFolderId         String?
+  defaultEntityId         String?
+  defaultTypeId           String?
+  defaultSubtypeId        String?
+  outboundEnabled         Boolean  @default(false)
+  smtpHost                String   @default("smtp.yandex.ru")
+  smtpPort                Int      @default(465)
+  smtpSecure              Boolean  @default(true)
+  smtpUser                String?
+  smtpPasswordEncrypted   String?
+  fromAddress             String?
+  fromName                String   @default("Office ServiceDesk")
+  workerEnabled           Boolean  @default(true)
+  workerIntervalMs        Int      @default(60000)
+  workerBatchSize         Int      @default(20)
+  lockTtlMs               Int      @default(300000)
+  maxAttempts             Int      @default(5)
+  retryDelayMinutes       Int      @default(15)
+  notificationsEnabled    Boolean  @default(true)
+  notifyRequesterCreated  Boolean  @default(true)
+  notifyRequesterComment  Boolean  @default(true)
+  notifyRequesterStatus   Boolean  @default(true)
+  notifyRequesterAssigned Boolean  @default(false)
+  notifyAssigneeAssigned  Boolean  @default(true)
+  portalBaseUrl           String?
+  createdSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
+  createdBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
+  commentSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Новый ответ: {{title}}")
+  commentBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} появился новый ответ.\n\n{{comment}}\n\n{{portalLink}}")
+  statusSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Статус изменён: {{status}}")
+  statusBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
+  assignedSubjectTemplate String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
+  assignedBodyTemplate    String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
+  assigneeSubjectTemplate String   @default("[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}")
+  assigneeBodyTemplate    String   @default("Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   @@map("email_settings")
 }
@@ -517,6 +520,7 @@ model KnowledgeArticle {
 
   @@index([category])
   @@index([isPublished])
+  @@index([isPublished, updatedAt])
   @@map("knowledge_articles")
 }
 
@@ -528,6 +532,7 @@ model TaskAssignee {
   userId String
 
   @@unique([taskId, userId])
+  @@index([userId, taskId])
   @@map("task_assignees")
 }
 
@@ -575,24 +580,24 @@ model TaskComment {
   externalReferences    TaskExternalReference[]
   createdAt             DateTime                @default(now())
 
-  @@index([taskId, visibility])
+  @@index([taskId, visibility, createdAt])
   @@map("task_comments")
 }
 
 model ChatThread {
-  id           String      @id @default(cuid())
+  id           String        @id @default(cuid())
   kind         ChatKind
   title        String?
   avatar       String?
-  directKey    String?     @unique
-  department   Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  departmentId String?     @unique
-  createdBy    User?       @relation("ChatThreadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  directKey    String?       @unique
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId String?       @unique
+  createdBy    User?         @relation("ChatThreadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdById  String?
   members      ChatMember[]
   messages     ChatMessage[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   @@index([kind, updatedAt])
   @@map("chat_threads")
@@ -673,6 +678,7 @@ model TaskChatParticipant {
 
 model EmailOutboundMessage {
   id                String              @id @default(cuid())
+  dedupeKey         String?             @unique
   task              Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
   taskId            String
   comment           TaskComment?        @relation(fields: [commentId], references: [id], onDelete: SetNull)
@@ -742,6 +748,7 @@ model TaskTimelineEvent {
   @@index([taskId, createdAt])
   @@index([taskId, type])
   @@index([actorId])
+  @@index([type, createdAt])
   @@map("task_timeline_events")
 }
 

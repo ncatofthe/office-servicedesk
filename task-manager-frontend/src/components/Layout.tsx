@@ -249,7 +249,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
     void syncUnreadCount();
     const timer = window.setInterval(() => {
-      void syncUnreadCount();
+      if (document.visibilityState === 'visible') {
+        void syncUnreadCount();
+      }
     }, 60000);
 
     return () => window.clearInterval(timer);
@@ -270,8 +272,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     };
 
     void syncChatUnreadCount();
+    if (location.pathname === '/chats') {
+      return;
+    }
     const timer = window.setInterval(() => {
-      void syncChatUnreadCount();
+      if (document.visibilityState === 'visible') {
+        void syncChatUnreadCount();
+      }
     }, 30000);
 
     return () => window.clearInterval(timer);

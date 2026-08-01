@@ -111,7 +111,11 @@ const getActionErrorMessage = (error: unknown, fallback: string) => {
   const apiMessage = getApiErrorMessage(error, '');
 
   if (response?.status === 403) {
-    return apiMessage || 'Недостаточно прав для этого действия. Обновите список или обратитесь к администратору.';
+    const normalizedMessage = apiMessage.trim().toLowerCase();
+    if (!apiMessage || normalizedMessage === 'access denied' || normalizedMessage === 'forbidden') {
+      return 'Недостаточно прав для этого действия. Обновите список или обратитесь к администратору.';
+    }
+    return apiMessage;
   }
   if (response?.status === 404) {
     return 'Заявка больше недоступна. Обновите список и попробуйте снова.';

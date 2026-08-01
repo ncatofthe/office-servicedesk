@@ -552,7 +552,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
     }
 
     if (!testTaskId.trim()) {
-      setError('Укажите внутренний ID заявки для проверки.');
+      setError('Укажите служебный ID заявки для проверки.');
       return;
     }
 
@@ -753,7 +753,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
               <div>
                 <div className="text-sm font-semibold text-[#1f1f1f]">Выбранное правило</div>
                 <p className="mt-1 text-sm text-[#727272]">
-                  Безопасная проверка и журнал запусков работают по выбранному правилу. При необходимости журнал можно отфильтровать по внутреннему ID правила.
+                  Безопасная проверка и журнал срабатываний работают по выбранному правилу.
                 </p>
               </div>
               {loadingDetail && <span className="chip">Обновляем…</span>}
@@ -794,7 +794,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <input
                       className="input"
-                      placeholder="taskId для проверки"
+                      placeholder="Служебный ID заявки, например cm..."
                       value={testTaskId}
                       onChange={(event) => setTestTaskId(event.target.value)}
                       data-testid="automation-rule-test-task-id"
@@ -839,7 +839,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
                         <div className="font-medium text-[#1f1f1f]">Как будет выглядеть заявка после правила</div>
                         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <div className="rounded-[10px] border border-[#ececec] bg-white px-3 py-2">
-                            <div className="text-xs text-[#8a8a8a]">taskId</div>
+                            <div className="text-xs text-[#8a8a8a]">Служебный ID заявки</div>
                             <div>{testResult.resultingTask.id}</div>
                           </div>
                           <div className="rounded-[10px] border border-[#ececec] bg-white px-3 py-2">
@@ -879,12 +879,12 @@ export const AutomationRulesAdminSection: React.FC = () => {
                 <div className="rounded-[12px] border border-[#e6e6e6] bg-white p-4 space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-[#1f1f1f]">
                     <CheckCircle2 size={15} />
-                    Последние запуски automation
+                    Журнал срабатываний
                   </div>
 
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm text-[#5f5f5f]">Фильтр по taskId</label>
+                      <label className="mb-1 block text-sm text-[#5f5f5f]">Служебный ID заявки</label>
                       <input
                         className="input"
                         placeholder="Например, cm..."
@@ -893,7 +893,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm text-[#5f5f5f]">Внутренний ID правила</label>
+                      <label className="mb-1 block text-sm text-[#5f5f5f]">Служебный ID правила</label>
                       <input
                         className="input"
                         placeholder={selectedRuleId ? `Выбрано: ${selectedRuleId}` : 'Введите ID правила'}
@@ -923,7 +923,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
                       Сбросить фильтры
                     </button>
                     {effectiveRunRuleFilter && !runRuleFilter.trim() && (
-                      <span className="chip">Сейчас показано правило: {effectiveRunRuleFilter}</span>
+                      <span className="chip">Показаны запуски выбранного правила</span>
                     )}
                   </div>
 
@@ -939,7 +939,7 @@ export const AutomationRulesAdminSection: React.FC = () => {
                             <div className="min-w-0">
                               <div className="font-medium text-[#1f1f1f]">{run.ruleName}</div>
                               <div className="mt-1 text-xs text-[#8a8a8a]">
-                                Заявка: {run.taskId} · {triggerLabels[run.triggerType]} · {formatDateTime(run.createdAt)}
+                                ID заявки: {run.taskId} · {triggerLabels[run.triggerType]} · {formatDateTime(run.createdAt)}
                               </div>
                             </div>
                             <span className={`chip ${run.status === 'SUCCESS' ? 'border-[#d2e7d8] bg-[#eef8f1] text-[#1f7a42]' : 'border-[#e7d7d7] bg-[#faf0f0] text-[#9d5151]'}`}>

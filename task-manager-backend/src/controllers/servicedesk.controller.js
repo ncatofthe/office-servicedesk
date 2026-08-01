@@ -5,6 +5,7 @@ const emailOutboundService = require('../services/email-outbound.service.js');
 const freshdeskImportService = require('../services/freshdesk-import.service.js');
 const freshdeskApiService = require('../services/freshdesk-api.service.js');
 const productSettingsService = require('../services/product-settings.service.js');
+const chatService = require('../services/chat.service.js');
 const emailSettingsService = require('../services/email-settings.service.js');
 const { startEmailIntakeScheduler, stopEmailIntakeScheduler } = require('../services/email-intake.service.js');
 const { startEmailOutboxWorker, stopEmailOutboxWorker } = require('../services/email-outbox-worker.service.js');
@@ -89,6 +90,9 @@ const getAdminProductSettings = async(req, res) => {
 const updateProductSettings = async(req, res) => {
     try {
         const settings = await productSettingsService.updateProductSettings(req.body || {});
+        if (Object.prototype.hasOwnProperty.call(req.body?.features || {}, 'chats')) {
+            chatService.invalidateSettingsCache();
+        }
         res.json(serializeProductSettings(settings, { admin: true }));
     } catch (error) {
         handleServiceDeskError(error, res);

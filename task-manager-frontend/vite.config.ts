@@ -9,9 +9,9 @@ export default defineConfig({
   build: isSitesSingleFileBuild
     ? {
         cssCodeSplit: false,
-        rollupOptions: {
+        rolldownOptions: {
           output: {
-            inlineDynamicImports: true,
+            codeSplitting: false,
           },
         },
       }

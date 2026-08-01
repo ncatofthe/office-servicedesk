@@ -18,6 +18,7 @@ if (!hasRequiredEnv) {
         cleanupOrphanedEmailAttachmentFiles,
         processParsedEmailMessage
     } = require('../src/services/email-intake.service.js');
+    const emailSettingsService = require('../src/services/email-settings.service.js');
 
     after(async() => {
         await prisma.$disconnect();
@@ -145,15 +146,15 @@ if (!hasRequiredEnv) {
         const subject = `Email intake rollback ${runId}`;
         const mailbox = `INTAKE_ROLLBACK_${runId}`;
         const filesBefore = listEmailAttachmentFiles();
-        const previousDefaultFolderId = process.env.EMAIL_DEFAULT_FOLDER_ID;
-        process.env.EMAIL_DEFAULT_FOLDER_ID = `missing-folder-${runId}`;
+        const previousDefaultFolderId = emailSettingsService.getRuntimeEmailSettings().defaultFolderId;
+        await emailSettingsService.updateEmailSettings({
+            defaultFolderId: `missing-folder-${runId}`
+        });
 
         t.after(async() => {
-            if (previousDefaultFolderId === undefined) {
-                delete process.env.EMAIL_DEFAULT_FOLDER_ID;
-            } else {
-                process.env.EMAIL_DEFAULT_FOLDER_ID = previousDefaultFolderId;
-            }
+            await emailSettingsService.updateEmailSettings({
+                defaultFolderId: previousDefaultFolderId || null
+            });
             await prisma.emailInboundMessage.deleteMany({ where: { messageId } });
             await prisma.task.deleteMany({ where: { title: subject } });
             await prisma.user.deleteMany({ where: { email: `intake-${runId}@example.com` } });

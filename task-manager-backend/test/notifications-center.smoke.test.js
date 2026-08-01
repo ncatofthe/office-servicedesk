@@ -18,6 +18,7 @@ if (!hasRequiredEnv) {
     const app = require('../src/app.js');
     const prisma = require('../src/prisma/prisma.js');
     const notificationService = require('../src/services/notification.service.js');
+    const emailSettingsService = require('../src/services/email-settings.service.js');
     const { createTestUser, loginUser } = require('../test-support/auth-test-utils.cjs');
 
     after(async() => {
@@ -27,6 +28,12 @@ if (!hasRequiredEnv) {
     test('notification center supports task-created, comments, dedupe and read-all', async(t) => {
         const runId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const password = 'password123';
+        const previousEmailSettings = emailSettingsService.getRuntimeEmailSettings();
+        await emailSettingsService.updateEmailSettings({
+            notificationsEnabled: true,
+            notifyRequesterCreated: true,
+            notifyRequesterComment: true
+        });
 
         const requester = await createTestUser(prisma, {
             email: `notify-requester-${runId}@example.com`,
@@ -67,6 +74,11 @@ if (!hasRequiredEnv) {
         });
 
         t.after(async() => {
+            await emailSettingsService.updateEmailSettings({
+                notificationsEnabled: previousEmailSettings.notificationsEnabled,
+                notifyRequesterCreated: previousEmailSettings.notifyRequesterCreated,
+                notifyRequesterComment: previousEmailSettings.notifyRequesterComment
+            });
             await prisma.notification.deleteMany({
                 where: {
                     userId: { in: [requester.id, folderAgent.id, secondAgent.id] }
@@ -149,7 +161,7 @@ if (!hasRequiredEnv) {
         const initialOutboxCount = await prisma.emailOutboundMessage.count({
             where: {
                 taskId,
-                recipientEmail: folderAgent.email
+                recipientEmail: requester.email
             }
         });
         assert.equal(initialOutboxCount, 1);
@@ -196,7 +208,7 @@ if (!hasRequiredEnv) {
                 recipientEmail: requester.email
             }
         });
-        assert.equal(requesterOutboxCount, 1);
+        assert.equal(requesterOutboxCount, initialOutboxCount + 1);
 
         const requesterUnreadBeforeInternal = await request(app)
             .get('/api/notifications/unread-count')

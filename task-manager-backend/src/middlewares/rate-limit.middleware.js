@@ -1,14 +1,25 @@
 const DEFAULT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
-const DEFAULT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS || 2000);
+const DEFAULT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS || 10000);
 const DEFAULT_LOGIN_MAX_REQUESTS = Number(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS || process.env.LOGIN_RATE_LIMIT_MAX_REQUESTS || 30);
 const DEFAULT_REGISTER_MAX_REQUESTS = Number(process.env.REGISTER_RATE_LIMIT_MAX_REQUESTS || 20);
 
 const createRateLimit = ({ windowMs, maxRequests, keyPrefix }) => {
     const buckets = new Map();
+    let nextCleanupAt = Date.now() + windowMs;
 
     return (req, res, next) => {
         const key = `${keyPrefix}:${req.ip}`;
         const now = Date.now();
+
+        if (now >= nextCleanupAt) {
+            for (const [bucketKey, storedBucket] of buckets) {
+                if (now > storedBucket.resetAt) {
+                    buckets.delete(bucketKey);
+                }
+            }
+            nextCleanupAt = now + windowMs;
+        }
+
         const bucket = buckets.get(key);
 
         if (!bucket || now > bucket.resetAt) {

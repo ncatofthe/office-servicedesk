@@ -15,6 +15,7 @@ const AGENT_COMPATIBILITY_ROLES = ['AGENT'];
 
 const TASK_NOTIFICATION_SELECT = {
     id: true,
+    updatedAt: true,
     ticketNumber: true,
     title: true,
     status: true,
@@ -32,6 +33,7 @@ const TASK_NOTIFICATION_SELECT = {
     },
     assignees: {
         select: {
+            id: true,
             userId: true,
             user: {
                 select: {
@@ -72,22 +74,22 @@ const notificationVariables = (task, extra = {}) => {
         portalLink: url ? `Открыть заявку: ${url}` : '', ...extra };
 };
 
-const queueRequesterTemplate = async(task, kind, extra = {}, db = prisma) => {
+const queueRequesterTemplate = async(task, kind, extra = {}, db = prisma, dedupeKey = null) => {
     const settings = emailSettingsService.getRuntimeEmailSettings();
     const enabled = settings.notificationsEnabled && settings[`notifyRequester${kind}`];
     if (!enabled || !task?.author?.email || !(await productSettingsService.isFeatureEnabled('email', db))) return null;
     const prefix = kind.charAt(0).toLowerCase() + kind.slice(1);
     const variables = notificationVariables(task, extra);
-    return queueOutboundEmail({ taskId: task.id, actorId: null, to: task.author.email, recipientName: task.author.name || null,
+    return queueOutboundEmail({ taskId: task.id, actorId: null, dedupeKey, to: task.author.email, recipientName: task.author.name || null,
         subject: renderTemplate(settings[`${prefix}SubjectTemplate`], variables), text: renderTemplate(settings[`${prefix}BodyTemplate`], variables) }, { db });
 };
 
-const queueAssigneeNotification = async(task, assignee, db = prisma) => {
+const queueAssigneeNotification = async(task, assignee, db = prisma, dedupeKey = null) => {
     const settings = emailSettingsService.getRuntimeEmailSettings();
     if (!settings.notificationsEnabled || !settings.notifyAssigneeAssigned || !assignee?.email
         || !(await productSettingsService.isFeatureEnabled('email', db))) return null;
     const variables = notificationVariables(task, { assigneeName: assignee.name || assignee.email });
-    return queueOutboundEmail({ taskId: task.id, actorId: null, to: assignee.email, recipientName: assignee.name || null,
+    return queueOutboundEmail({ taskId: task.id, actorId: null, dedupeKey, to: assignee.email, recipientName: assignee.name || null,
         subject: renderTemplate(settings.assigneeSubjectTemplate, variables),
         text: renderTemplate(settings.assigneeBodyTemplate, variables) }, { db });
 };
@@ -334,6 +336,7 @@ const maybeQueueNotificationEmail = async({ recipient, task, title, message, eve
     return queueOutboundEmail({
         taskId: task.id,
         actorId: null,
+        dedupeKey: eventKey ? `notification:${eventKey}:${recipient.id || recipient.email}` : null,
         to: recipient.email,
         recipientName: recipient.name || null,
         subject: `${buildTaskLabel(task)}: ${title}`,
@@ -446,7 +449,7 @@ const notifyTaskCreated = async(taskId, actor, options = {}) => {
         sendEmail: false,
         db
     });
-    await queueRequesterTemplate(task, 'Created', {}, db);
+    await queueRequesterTemplate(task, 'Created', {}, db, `requester-created:${task.id}`);
     return results;
 };
 
@@ -511,7 +514,15 @@ const notifyCommentCreated = async(taskId, comment, actor, options = {}) => {
             sendEmail: false,
             db
         });
-        if (shouldEmailRequester) await queueRequesterTemplate(task, 'Comment', { comment: comment.content || comment.text || '' }, db);
+        if (shouldEmailRequester) {
+            await queueRequesterTemplate(
+                task,
+                'Comment',
+                { comment: comment.content || comment.text || '' },
+                db,
+                `requester-comment:${comment.id}`
+            );
+        }
         return results;
     }
 
@@ -553,8 +564,17 @@ const notifyTaskAssigned = async(taskId, assigneeUserId, actor, options = {}) =>
         },
         db
     });
-    await queueAssigneeNotification(task, recipient, db);
-    if (task.author?.id !== actor?.id) await queueRequesterTemplate(task, 'Assigned', { assigneeName: recipient.name || recipient.email }, db);
+    const assignmentId = task.assignees.find((item) => item.userId === assigneeUserId)?.id || assigneeUserId;
+    await queueAssigneeNotification(task, recipient, db, `assignee-assigned:${task.id}:${assignmentId}`);
+    if (task.author?.id !== actor?.id) {
+        await queueRequesterTemplate(
+            task,
+            'Assigned',
+            { assigneeName: recipient.name || recipient.email },
+            db,
+            `requester-assigned:${task.id}:${assignmentId}`
+        );
+    }
     return results;
 };
 
@@ -579,7 +599,16 @@ const notifyTaskStatusChanged = async(taskId, oldStatus, newStatus, actor, optio
         },
         db
     });
-    if (task.author?.id !== actor?.id) await queueRequesterTemplate(task, 'Status', { oldStatus, status: newStatus }, db);
+    if (task.author?.id !== actor?.id) {
+        const statusEventAt = task.updatedAt instanceof Date ? task.updatedAt.toISOString() : String(task.updatedAt || '');
+        await queueRequesterTemplate(
+            task,
+            'Status',
+            { oldStatus, status: newStatus },
+            db,
+            `requester-status:${task.id}:${oldStatus}:${newStatus}:${statusEventAt}`
+        );
+    }
     return results;
 };
 

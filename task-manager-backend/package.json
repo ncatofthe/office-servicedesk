@@ -5,6 +5,7 @@
     "main": "src/server.js",
     "scripts": {
         "start": "npm run prisma:generate && node src/server.js",
+        "start:runtime": "node src/server.js",
         "start:e2e": "set -a && . ./.env.test && export PORT=5002 CORS_ORIGINS=http://127.0.0.1:4173,http://localhost:4173 BACKUP_ENABLED=false EMAIL_INTAKE_ENABLED=false && set +a && npm --prefix .. run build:contracts && npm run prisma:migrate:deploy && npm run prisma:seed && node src/server.js",
         "dev": "npm run prisma:generate && nodemon src/server.js",
         "dev:runtime": "npm run prisma:generate && npm --prefix .. run build:contracts && nodemon src/server.js",

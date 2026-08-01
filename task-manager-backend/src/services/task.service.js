@@ -757,12 +757,16 @@ const getById = async(id, user) => {
     });
 
     await assertTaskReadAccess(task, user);
+    const [comments, mergeInfo] = await Promise.all([
+        commentService.getByTask(id, user),
+        getMergeInfoForTask(id)
+    ]);
 
     return {
         ...task,
-        comments: await commentService.getByTask(id, user),
+        comments,
         attachments: task.attachments.map(mapAttachmentToDownloadPath),
-        mergeInfo: await getMergeInfoForTask(id)
+        mergeInfo
     };
 };
 

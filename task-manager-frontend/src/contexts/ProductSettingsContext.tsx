@@ -45,7 +45,11 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
   useEffect(() => {
     void refreshSettings();
-    const interval = window.setInterval(() => void refreshSettings(), 60000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshSettings();
+      }
+    }, 60000);
     const handleFocus = () => void refreshSettings();
     window.addEventListener('focus', handleFocus);
     return () => {

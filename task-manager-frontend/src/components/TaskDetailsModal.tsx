@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, X } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { UserAvatar } from './ui/UserAvatar';
@@ -594,7 +594,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     return () => window.cancelAnimationFrame(frame);
   }, [comments.length, open, taskId]);
 
-  const applyTaskContext = (
+  const applyTaskContext = useCallback((
     updatedTask: TaskDetail,
     updatedComments: TaskComment[],
     updatedMergeResult: { ok: true; data: TaskMergeInfo } | { ok: false; error: unknown },
@@ -631,9 +631,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setEmailThread(null);
       setEmailThreadError(getApiErrorMessage(updatedEmailThreadResult.error, 'Не удалось загрузить email-переписку.'));
     }
-  };
+  }, [isFeatureEnabled]);
 
-  const fetchTaskContext = async (id: string) => {
+  const fetchTaskContext = useCallback(async (id: string) => {
     const [updatedTask, updatedComments, updatedMergeResult, updatedTimelineResult, updatedEmailThreadResult] = await Promise.all([
       tasksApi.getById(id),
       commentsApi.getByTask(id),
@@ -651,7 +651,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       updatedTimelineResult,
       updatedEmailThreadResult,
     };
-  };
+  }, [isFeatureEnabled]);
 
   useEffect(() => {
     if (!taskId || !open) return;
@@ -684,7 +684,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       }
     };
     load();
-  }, [taskId, open, isFeatureEnabled]);
+  }, [taskId, open, isFeatureEnabled, fetchTaskContext, applyTaskContext]);
 
   useEffect(() => {
     if (!open) {

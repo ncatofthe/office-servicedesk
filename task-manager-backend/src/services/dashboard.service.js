@@ -12,7 +12,6 @@ const EXCLUDE_UNION_CHILD_TASKS_WHERE = {
 const getDashboard = async(user) => {
     const hasGlobalScope = canReadAllTickets(user.role);
 
-    // Build where clause based on role
     let taskWhere = {
         ...EXCLUDE_UNION_CHILD_TASKS_WHERE,
         status: { not: 'MERGED' }
@@ -32,80 +31,10 @@ const getDashboard = async(user) => {
         };
     }
 
-    // Task KPIs using groupBy
-    const statusCounts = await prisma.task.groupBy({
-        by: ['status'],
-        where: taskWhere,
-        _count: { id: true }
-    });
-
-    const totalTasks = statusCounts.reduce(function(sum, s) { return sum + s._count.id; }, 0);
-    const doneCount = statusCounts.find(function(s) { return s.status === 'DONE'; });
-    const newCount = statusCounts.find(function(s) { return s.status === 'NEW'; });
-    const inProgressCount = statusCounts.find(function(s) { return s.status === 'IN_PROGRESS'; });
-    const reworkCount = statusCounts.find(function(s) { return s.status === 'REWORK'; });
-    const reviewCount = statusCounts.find(function(s) { return s.status === 'REVIEW'; });
-    const postponedCount = statusCounts.find(function(s) { return s.status === 'POSTPONED'; });
-    const doneTotal = doneCount ? doneCount._count.id : 0;
-    const newTotal = newCount ? newCount._count.id : 0;
-    const inProgressTotal = inProgressCount ? inProgressCount._count.id : 0;
-    const reworkTotal = reworkCount ? reworkCount._count.id : 0;
-    const reviewTotal = reviewCount ? reviewCount._count.id : 0;
-    const postponedTotal = postponedCount ? postponedCount._count.id : 0;
-    const pendingCount = newTotal;
-    const completionRate = totalTasks > 0 ? ((doneTotal / totalTasks) * 100).toFixed(2) : 0;
-
-    // Monthly productivity (DONE tasks last 12 months)
     const now = new Date();
     const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1);
-
-    const doneTasks = await prisma.task.findMany({
-        where: {
-            ...taskWhere,
-            status: 'DONE',
-            updatedAt: { gte: yearAgo }
-        },
-        select: {
-            updatedAt: true
-        }
-    });
-
-    const monthlyMap = {};
-    doneTasks.forEach(function(task) {
-        const month = task.updatedAt.toISOString().slice(0, 7);
-        monthlyMap[month] = (monthlyMap[month] || 0) + 1;
-    });
-
-    const monthlyProductivity = Object.entries(monthlyMap)
-        .sort(function(a, b) { return b[0].localeCompare(a[0]); })
-        .slice(0, 12)
-        .map(function(entry) { return { month: entry[0], completed: entry[1] }; })
-        .reverse();
-
-    // On time percentage
-    const allDoneTasks = await prisma.task.findMany({
-        where: {
-            ...taskWhere,
-            status: 'DONE',
-            dueDate: { not: null }
-        },
-        select: {
-            dueDate: true,
-            updatedAt: true
-        }
-    });
-
-    let onTimeCount = 0;
-    allDoneTasks.forEach(function(task) {
-        if (task.updatedAt <= task.dueDate) {
-            onTimeCount++;
-        }
-    });
-
-    const doneWithDueDateTotal = allDoneTasks.length;
-    const onTimePercent = doneWithDueDateTotal > 0 ? ((onTimeCount / doneWithDueDateTotal) * 100).toFixed(2) : 0;
-
-    // Active employees with tasks in progress
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const activeWhere = {
         ...EXCLUDE_UNION_CHILD_TASKS_WHERE,
         status: { in: ['IN_PROGRESS', 'REVIEW', 'REWORK', 'POSTPONED'] }
@@ -113,33 +42,6 @@ const getDashboard = async(user) => {
     if (!hasGlobalScope) {
         activeWhere.assignees = { some: { userId: user.id } };
     }
-
-    const activeTasks = await prisma.taskAssignee.findMany({
-        where: {
-            task: activeWhere
-        },
-        include: {
-            user: { select: { id: true, name: true, avatar: true, role: true } }
-        }
-    });
-
-    const activeMap = {};
-    activeTasks.forEach(function(ta) {
-        const key = ta.user.id;
-        if (!activeMap[key]) {
-            activeMap[key] = { id: ta.user.id, name: ta.user.name, avatar: ta.user.avatar, role: ta.user.role, tasks_count: 0 };
-        }
-        activeMap[key].tasks_count++;
-    });
-
-    const activeEmployees = Object.values(activeMap)
-        .sort(function(a, b) { return b.tasks_count - a.tasks_count; })
-        .slice(0, 10);
-
-    // Worker of the month
-    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
     const workerWhere = {
         ...EXCLUDE_UNION_CHILD_TASKS_WHERE,
         status: 'DONE',
@@ -149,73 +51,158 @@ const getDashboard = async(user) => {
         workerWhere.assignees = { some: { userId: user.id } };
     }
 
-    const workerTasks = await prisma.taskAssignee.findMany({
-        where: {
-            task: workerWhere
-        },
-        include: {
-            user: { select: { id: true, name: true, avatar: true, role: true } }
-        }
+    const [
+        statusCounts,
+        doneTasks,
+        allDoneTasks,
+        activeTasks,
+        workerTasks,
+        closeEvents
+    ] = await Promise.all([
+        prisma.task.groupBy({
+            by: ['status'],
+            where: taskWhere,
+            _count: { id: true }
+        }),
+        prisma.task.findMany({
+            where: {
+                ...taskWhere,
+                status: 'DONE',
+                updatedAt: { gte: yearAgo }
+            },
+            select: { updatedAt: true }
+        }),
+        prisma.task.findMany({
+            where: {
+                ...taskWhere,
+                status: 'DONE',
+                dueDate: { not: null }
+            },
+            select: {
+                dueDate: true,
+                updatedAt: true
+            }
+        }),
+        prisma.taskAssignee.findMany({
+            where: { task: activeWhere },
+            include: {
+                user: { select: { id: true, name: true, avatar: true, role: true } }
+            }
+        }),
+        prisma.taskAssignee.findMany({
+            where: { task: workerWhere },
+            include: {
+                user: { select: { id: true, name: true, avatar: true, role: true } }
+            }
+        }),
+        prisma.taskTimelineEvent.findMany({
+            where: {
+                type: 'STATUS_CHANGED',
+                task: taskWhere
+            },
+            include: {
+                actor: { select: { id: true, name: true, avatar: true, role: true } },
+                task: {
+                    select: {
+                        id: true,
+                        ticketNumber: true,
+                        title: true,
+                        priority: true,
+                        status: true,
+                        updatedAt: true
+                    }
+                }
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50
+        })
+    ]);
+
+    const statusMap = new Map(statusCounts.map((entry) => [entry.status, entry._count.id]));
+    const totalTasks = statusCounts.reduce((sum, entry) => sum + entry._count.id, 0);
+    const doneTotal = statusMap.get('DONE') || 0;
+    const newTotal = statusMap.get('NEW') || 0;
+    const inProgressTotal = statusMap.get('IN_PROGRESS') || 0;
+    const reworkTotal = statusMap.get('REWORK') || 0;
+    const reviewTotal = statusMap.get('REVIEW') || 0;
+    const postponedTotal = statusMap.get('POSTPONED') || 0;
+    const completionRate = totalTasks > 0 ? ((doneTotal / totalTasks) * 100).toFixed(2) : 0;
+
+    const monthlyMap = {};
+    doneTasks.forEach((task) => {
+        const month = task.updatedAt.toISOString().slice(0, 7);
+        monthlyMap[month] = (monthlyMap[month] || 0) + 1;
     });
+    const monthlyProductivity = Object.entries(monthlyMap)
+        .sort((left, right) => right[0].localeCompare(left[0]))
+        .slice(0, 12)
+        .map(([month, completed]) => ({ month, completed }))
+        .reverse();
+
+    const onTimeCount = allDoneTasks.reduce(
+        (count, task) => count + (task.updatedAt <= task.dueDate ? 1 : 0),
+        0
+    );
+    const doneWithDueDateTotal = allDoneTasks.length;
+    const onTimePercent = doneWithDueDateTotal > 0
+        ? ((onTimeCount / doneWithDueDateTotal) * 100).toFixed(2)
+        : 0;
+
+    const activeMap = {};
+    activeTasks.forEach((taskAssignee) => {
+        const { user: assignedUser } = taskAssignee;
+        if (!activeMap[assignedUser.id]) {
+            activeMap[assignedUser.id] = {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                avatar: assignedUser.avatar,
+                role: assignedUser.role,
+                tasks_count: 0
+            };
+        }
+        activeMap[assignedUser.id].tasks_count += 1;
+    });
+    const activeEmployees = Object.values(activeMap)
+        .sort((left, right) => right.tasks_count - left.tasks_count)
+        .slice(0, 10);
 
     const workerMap = {};
-    workerTasks.forEach(function(ta) {
-        const key = ta.user.id;
-        if (!workerMap[key]) {
-            workerMap[key] = { id: ta.user.id, name: ta.user.name, avatar: ta.user.avatar, role: ta.user.role, done_count: 0 };
+    workerTasks.forEach((taskAssignee) => {
+        const { user: assignedUser } = taskAssignee;
+        if (!workerMap[assignedUser.id]) {
+            workerMap[assignedUser.id] = {
+                id: assignedUser.id,
+                name: assignedUser.name,
+                avatar: assignedUser.avatar,
+                role: assignedUser.role,
+                done_count: 0
+            };
         }
-        workerMap[key].done_count++;
+        workerMap[assignedUser.id].done_count += 1;
     });
-
     const workerOfMonth = Object.values(workerMap)
-        .sort(function(a, b) { return b.done_count - a.done_count; })[0] || null;
-
-    const closeEvents = await prisma.taskTimelineEvent.findMany({
-        where: {
-            type: 'STATUS_CHANGED',
-            task: taskWhere
-        },
-        include: {
-            actor: { select: { id: true, name: true, avatar: true, role: true } },
-            task: {
-                select: {
-                    id: true,
-                    ticketNumber: true,
-                    title: true,
-                    priority: true,
-                    status: true,
-                    updatedAt: true
-                }
-            }
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 50
-    });
+        .sort((left, right) => right.done_count - left.done_count)[0] || null;
 
     const recentClosures = closeEvents
-        .filter(function(event) {
-            return event.metadata && event.metadata.toStatus === 'DONE';
-        })
+        .filter((event) => event.metadata && event.metadata.toStatus === 'DONE')
         .slice(0, 10)
-        .map(function(event) {
-            return {
-                id: event.id,
-                closedAt: event.createdAt,
-                actor: event.actor,
-                task: {
-                    id: event.task.id,
-                    ticketNumber: event.task.ticketNumber,
-                    displayNumber: typeof event.task.ticketNumber === 'number' ? `#${event.task.ticketNumber}` : undefined,
-                    title: event.task.title,
-                    priority: event.task.priority,
-                    status: event.task.status
-                }
-            };
-        });
+        .map((event) => ({
+            id: event.id,
+            closedAt: event.createdAt,
+            actor: event.actor,
+            task: {
+                id: event.task.id,
+                ticketNumber: event.task.ticketNumber,
+                displayNumber: typeof event.task.ticketNumber === 'number' ? `#${event.task.ticketNumber}` : undefined,
+                title: event.task.title,
+                priority: event.task.priority,
+                status: event.task.status
+            }
+        }));
 
     return {
         kpi: {
-            pending: pendingCount,
+            pending: newTotal,
             inProgress: inProgressTotal + reworkTotal + reviewTotal + postponedTotal,
             completed: doneTotal,
             completionRate: completionRate + '%'

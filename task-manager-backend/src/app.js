@@ -30,7 +30,13 @@ const corsOptions = {
 // Middlewares
 app.use(helmet());
 app.use(cors(corsOptions));
-app.use(morgan('combined'));
+app.use(morgan('combined', {
+    // Nginx keeps the complete production access log. Avoid duplicating every
+    // successful polling request in systemd journal under office load.
+    skip: (req, res) => process.env.NODE_ENV === 'production'
+        && req.method === 'GET'
+        && res.statusCode < 400
+}));
 app.use(globalRateLimit);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));

@@ -6,6 +6,7 @@ const { startEmailIntakeScheduler, stopEmailIntakeScheduler } = require('./servi
 const { startEmailOutboxWorker, stopEmailOutboxWorker } = require('./services/email-outbox-worker.service.js');
 const { loadEmailSettings } = require('./services/email-settings.service.js');
 const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Graceful shutdown
 process.on('SIGTERM', async() => {
@@ -28,8 +29,8 @@ process.on('SIGINT', async() => {
 
 const startServer = async() => {
     await loadEmailSettings();
-    app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
+    app.listen(PORT, HOST, () => {
+        console.log(`Server running on ${HOST}:${PORT}`);
         startBackupScheduler();
         startEmailIntakeScheduler();
         startEmailOutboxWorker();

@@ -6,9 +6,15 @@ After=network.target postgresql.service
 Type=simple
 WorkingDirectory=/opt/officesd
 EnvironmentFile=/opt/officesd/task-manager-backend/.env
-ExecStart=/usr/bin/npm --workspace task-manager-backend run start
+Environment=HOST=127.0.0.1
+Environment=RATE_LIMIT_MAX_REQUESTS=10000
+Environment=PRODUCT_SETTINGS_CACHE_TTL_MS=30000
+Environment=CHAT_SETTINGS_CACHE_TTL_MS=30000
+Environment=CHAT_DEPARTMENT_SYNC_TTL_MS=60000
+ExecStart=/usr/bin/node task-manager-backend/src/server.js
 Restart=always
 RestartSec=5
+TimeoutStopSec=30
 User=servicedesk
 Group=servicedesk
 

@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:e2e": "VITE_API_URL=http://127.0.0.1:5002/api vite --host 127.0.0.1 --port 4173",
     "build": "tsc -b && vite build",
+    "build:vps": "tsc -b && SITES_SINGLE_FILE=1 vite build && node scripts/inline-production-assets.mjs",
     "build:sites": "tsc -b && SITES_SINGLE_FILE=1 vite build && node scripts/build-sites-worker.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

@@ -238,6 +238,7 @@ export const ChatsPage: React.FC = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const listsRefreshInFlight = useRef(false);
   const chatAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
@@ -281,7 +282,9 @@ export const ChatsPage: React.FC = () => {
     && (user?.role === 'ADMIN' || selectedChat.createdById === user?.id)
   );
 
-  const loadLists = useCallback(async (showLoader = false) => {
+  const loadLists = useCallback(async (showLoader = false, refreshDirectories = true) => {
+    if (listsRefreshInFlight.current) return;
+    listsRefreshInFlight.current = true;
     if (showLoader) setLoading(true);
     try {
       const currentSettings = await chatsApi.getSettings();
@@ -297,15 +300,15 @@ export const ChatsPage: React.FC = () => {
         currentSettings.directChatsEnabled || currentSettings.departmentChatsEnabled
           ? chatsApi.getAll()
           : Promise.resolve([]),
-        chatsApi.getUsers(),
-        currentSettings.ticketChatsEnabled
+        refreshDirectories ? chatsApi.getUsers() : Promise.resolve(null),
+        refreshDirectories && currentSettings.ticketChatsEnabled
           ? tasksApi.getAll({ limit: 100, sortBy: 'updated', sortOrder: 'desc' })
-          : Promise.resolve({ tasks: [], total: 0, limit: 100, offset: 0 }),
+          : Promise.resolve(null),
       ]);
 
       if (chatResult.status === 'fulfilled') setThreads(chatResult.value);
-      if (userResult.status === 'fulfilled') setUsers(userResult.value);
-      if (ticketResult.status === 'fulfilled') setTickets(ticketResult.value.tasks);
+      if (userResult.status === 'fulfilled' && userResult.value) setUsers(userResult.value);
+      if (ticketResult.status === 'fulfilled' && ticketResult.value) setTickets(ticketResult.value.tasks);
       if (chatResult.status === 'rejected' && ticketResult.status === 'rejected') {
         throw chatResult.reason;
       }
@@ -313,6 +316,7 @@ export const ChatsPage: React.FC = () => {
     } catch (loadError) {
       setError(getApiError(loadError, 'Не удалось загрузить диалоги.'));
     } finally {
+      listsRefreshInFlight.current = false;
       setLoading(false);
     }
   }, []);
@@ -357,8 +361,11 @@ export const ChatsPage: React.FC = () => {
   }, [loadConversation, selection]);
 
   useEffect(() => {
+    let cycle = 0;
     const timer = window.setInterval(() => {
-      void loadLists();
+      if (document.visibilityState !== 'visible') return;
+      cycle += 1;
+      void loadLists(false, cycle % 4 === 0);
       if (selection) void loadConversation(selection);
     }, 15000);
     return () => window.clearInterval(timer);

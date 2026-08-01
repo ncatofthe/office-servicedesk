@@ -1,6 +1,13 @@
 const prisma = require('../prisma/prisma.js');
 
 const PRODUCT_SETTINGS_ID = 'default';
+const PRODUCT_SETTINGS_CACHE_TTL_MS = Math.max(
+    0,
+    Number(process.env.PRODUCT_SETTINGS_CACHE_TTL_MS || 30_000)
+);
+let cachedProductSettings = null;
+let productSettingsCacheExpiresAt = 0;
+let productSettingsLoadPromise = null;
 const FEATURE_COLUMN_MAP = {
     dashboard: 'dashboardEnabled',
     tickets: 'ticketsEnabled',
@@ -143,7 +150,25 @@ const normalizeFeatures = (features) => {
     }, {});
 };
 
-const getProductSettings = async(db = prisma) => {
+const canUseProductSettingsCache = (db) => (
+    db === prisma
+    && process.env.NODE_ENV !== 'test'
+    && PRODUCT_SETTINGS_CACHE_TTL_MS > 0
+);
+
+const cacheProductSettings = (settings) => {
+    cachedProductSettings = settings;
+    productSettingsCacheExpiresAt = Date.now() + PRODUCT_SETTINGS_CACHE_TTL_MS;
+    return settings;
+};
+
+const invalidateProductSettingsCache = () => {
+    cachedProductSettings = null;
+    productSettingsCacheExpiresAt = 0;
+    productSettingsLoadPromise = null;
+};
+
+const loadProductSettings = async(db) => {
     const existing = await db.productSettings.findUnique({
         where: { id: PRODUCT_SETTINGS_ID },
         select: PRODUCT_SETTINGS_SELECT
@@ -162,6 +187,23 @@ const getProductSettings = async(db = prisma) => {
             select: PRODUCT_SETTINGS_SELECT
         });
     }
+};
+
+const getProductSettings = async(db = prisma) => {
+    if (!canUseProductSettingsCache(db)) {
+        return loadProductSettings(db);
+    }
+    if (cachedProductSettings && Date.now() < productSettingsCacheExpiresAt) {
+        return cachedProductSettings;
+    }
+    if (!productSettingsLoadPromise) {
+        productSettingsLoadPromise = loadProductSettings(db)
+            .then(cacheProductSettings)
+            .finally(() => {
+                productSettingsLoadPromise = null;
+            });
+    }
+    return productSettingsLoadPromise;
 };
 
 const updateProductSettings = async(payload, db = prisma) => {
@@ -242,7 +284,8 @@ const updateProductSettings = async(payload, db = prisma) => {
     };
 
     if (db === prisma) {
-        return prisma.$transaction(performUpdate);
+        const settings = await prisma.$transaction(performUpdate);
+        return cacheProductSettings(settings);
     }
     return performUpdate(db);
 };
@@ -266,6 +309,7 @@ module.exports = {
     PRODUCT_SETTINGS_DEFAULTS,
     PRODUCT_SETTINGS_SELECT,
     getProductSettings,
+    invalidateProductSettingsCache,
     isFeatureEnabled,
     updateProductSettings
 };

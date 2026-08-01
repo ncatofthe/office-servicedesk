@@ -26,7 +26,7 @@ const loginAs = async (page: Page, email: string, password: string) => {
   await page.getByTestId('login-password').fill(password);
   await page.getByTestId('login-submit').click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: 'Главная' })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
 };
 
 const openCreatedTicketFromTickets = async (page: Page) => {
@@ -60,7 +60,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
     await expect(page).toHaveURL(/\/login$/);
 
     await loginAs(page, requesterEmail, requesterPassword);
-    await expect(page.getByText('Заявщик')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Открыть профиль' })).toBeVisible();
     await expect(page.getByTestId('notification-bell')).toBeVisible();
 
     await page.goto('/tickets');
@@ -68,6 +68,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await page.getByTestId('open-create-ticket').click();
     await expect(page.getByTestId('create-ticket-modal')).toBeVisible();
+    await page.getByRole('button', { name: 'Уточнить тип и приоритет' }).click();
     await expect(page.getByTestId('ticket-form-priority')).toHaveValue('MEDIUM');
 
     await page.getByTestId('ticket-form-title').fill(ticketTitle);
@@ -105,14 +106,16 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
   });
 
   test('agent manages canned replies, leaves internal notes and sees timeline updates', async ({ page }) => {
+    test.slow();
     expect(createdTicketNumber).toMatch(/^#\d+$/);
 
     await loginAs(page, 'employee@taskmanager.com', 'password123');
 
+    await page.getByText('Ещё', { exact: true }).click();
     await expect(page.getByRole('link', { name: 'Шаблоны ответов' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Отчёты' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Финансы' })).toHaveCount(0);
-    await expect(page.getByRole('banner').getByText('Исполнитель')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Открыть профиль' })).toBeVisible();
     await expect(page.getByTestId('notification-bell')).toBeVisible();
 
     await page.goto('/tickets');
@@ -129,6 +132,8 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
     await createdInboxRow.getByTestId('task-quick-assign').last().click();
     await expect(page.getByTestId('task-action-error')).toContainText('Недостаточно прав');
     await page.unroute('**/api/tasks/*/assignees');
+    await createdInboxRow.getByTestId('task-quick-assign').last().click();
+    await expect(createdInboxRow.getByTestId('task-quick-assign')).toHaveCount(0);
 
     await page.getByTestId('notification-bell').click();
     await expect(page.getByTestId('notifications-dropdown')).toBeVisible();
@@ -140,7 +145,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await page.goto('/reports');
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { name: 'Главная' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
 
     await page.goto('/canned-replies');
     await expect(page.getByTestId('canned-replies-page')).toBeVisible();
@@ -290,23 +295,20 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await page.goto('/canned-replies');
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { name: 'Главная' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
 
     await page.goto('/tickets');
     await openCreatedTicketFromTickets(page);
     await expect(page.getByTestId('comments-list')).toContainText(publicCommentText);
     await expect(page.getByTestId('comments-list')).toContainText(privateTemplateComment);
     await expect(page.getByTestId('comments-list')).not.toContainText(internalNoteText);
-    await expect(page.getByTestId('task-timeline')).toContainText('Комментарий');
-    await expect(page.getByTestId('task-timeline')).not.toContainText('Внутренняя заметка');
     await expect(page.getByTestId('task-details-modal')).not.toContainText(internalNoteText);
-    await expect(page.getByTestId('task-email-thread')).toBeVisible();
-    await expect(page.getByTestId('task-email-thread')).not.toContainText('Попыток отправки');
-    await expect(page.getByTestId('task-email-thread')).not.toContainText('Следующий повтор');
+    await expect(page.getByTestId('task-timeline')).toHaveCount(0);
+    await expect(page.getByTestId('task-email-thread')).toHaveCount(0);
 
     await page.goto('/admin');
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { name: 'Главная' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
   });
 
   test('mobile: requester opens ticket details and sees stable layout', async ({ page }) => {
@@ -318,7 +320,8 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await expect(page.getByTestId('task-details-modal')).toBeVisible();
     await expect(page.getByTestId('comments-list')).toBeVisible();
-    await expect(page.getByTestId('task-timeline')).toBeVisible();
+    await expect(page.getByTestId('task-timeline')).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
   });
 
   test('viewer does not see templates UI', async ({ page }) => {
@@ -332,7 +335,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await page.goto('/canned-replies');
     await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByRole('heading', { name: 'Главная' })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('heading').first()).toBeVisible();
   });
 
   test('admin can open admin pages and knowledge list', async ({ page }) => {
@@ -365,16 +368,16 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
     await loginAs(page, 'admin@taskmanager.com', 'password123');
     await expect(page.getByRole('link', { name: 'Отчёты' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Финансы' })).toHaveCount(0);
-    await expect(page.getByText('Администратор')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Открыть профиль' })).toBeVisible();
     await expect(page.getByTestId('notification-bell')).toBeVisible();
     await expect(page.getByTestId('layout-portal-name')).toHaveText('Office ServiceDesk');
     await expect(page.getByTestId('layout-company-name')).toHaveCount(0);
     await expect(page.getByText('Office ServiceDesk', { exact: true })).toHaveCount(1);
     await expect(page).toHaveTitle('Office ServiceDesk');
     expect(await page.locator('html').getAttribute('lang')).toBe('ru-RU');
-    const usersNavigationBox = await page.getByRole('link', { name: 'Пользователи' }).boundingBox();
-    expect(usersNavigationBox).not.toBeNull();
-    expect((usersNavigationBox?.x || 0) + (usersNavigationBox?.width || 0)).toBeLessThanOrEqual(1274);
+    const moreNavigationBox = await page.locator('header details > summary').boundingBox();
+    expect(moreNavigationBox).not.toBeNull();
+    expect((moreNavigationBox?.x || 0) + (moreNavigationBox?.width || 0)).toBeLessThanOrEqual(1274);
     expect(await page.evaluate(() => document.body.scrollWidth <= document.documentElement.clientWidth)).toBeTruthy();
 
     await page.getByTestId('notification-bell').click();
@@ -419,12 +422,13 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: 'Настройки' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Компания и портал', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Компания и портал', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('admin-product-settings')).toBeVisible();
     await expect(page.getByTestId('product-settings-portal-name')).toHaveValue('Office ServiceDesk');
     await expect(page.getByTestId('product-settings-default-priority')).toHaveValue('MEDIUM');
     await expect(page.getByTestId('product-settings-save')).toBeEnabled();
-    for (const tabName of ['Папки', 'Типы', 'Подтипы', 'Классы', 'Команды и доступы']) {
+    for (const tabName of ['Папки', 'Типы', 'Подтипы', 'Категории', 'Команды и доступы']) {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
     }
     const adminTabList = page.getByRole('tablist', { name: 'Разделы' });
@@ -445,7 +449,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
     await page.getByRole('tab', { name: 'Почта' }).click();
     await expect(page.getByTestId('admin-email-outbox')).toBeVisible();
     await expect(page.getByTestId('admin-email-outbox-summary')).toBeVisible();
-    await expect(page.getByLabel('Статус')).toBeVisible();
+    await expect(page.getByLabel('Статус', { exact: true })).toBeVisible();
     await expect(page.getByLabel('Внутренний ID заявки')).toBeVisible();
     await expect(page.getByLabel('Лимит')).toBeVisible();
     const healthText = await page.getByTestId('admin-email-health').textContent();
