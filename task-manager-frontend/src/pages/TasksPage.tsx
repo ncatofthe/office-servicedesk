@@ -684,7 +684,8 @@ export const TasksPage: React.FC = () => {
         {nextStatus && (
           <button
             type="button"
-            className="btn xl:w-full"
+            className={`btn xl:w-full ${requiresCoordinatedClose ? 'min-h-11 py-2 text-center leading-4' : ''}`}
+            style={requiresCoordinatedClose ? { whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
             onClick={() => void (requiresCoordinatedClose ? approveCloseFromList(task) : moveForward(task, nextStatus))}
             disabled={Boolean(rowActionId)}
             data-testid="task-quick-status"

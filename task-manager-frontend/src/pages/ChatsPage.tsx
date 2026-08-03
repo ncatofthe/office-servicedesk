@@ -446,6 +446,22 @@ export const ChatsPage: React.FC = () => {
     ? selectedChat.members.map((member) => ({ userId: member.userId, user: member.user, role: 'PARTICIPANT' as const }))
     : ticketMembers;
 
+  const profileAvatarByUserId = useMemo(() => {
+    const avatars = new Map<string, string>();
+    const register = (candidate?: { id?: string; avatar?: string | null } | null) => {
+      if (candidate?.id && candidate.avatar) avatars.set(candidate.id, candidate.avatar);
+    };
+
+    users.forEach(register);
+    threads.forEach((chat) => chat.members.forEach((member) => register(member.user)));
+    ticketMembers.forEach((member) => register(member.user));
+    register(user);
+    return avatars;
+  }, [threads, ticketMembers, user, users]);
+
+  const resolveProfileAvatar = (userId?: string | null, embeddedAvatar?: string | null) =>
+    embeddedAvatar || (userId ? profileAvatarByUserId.get(userId) : null) || null;
+
   const availableUsers = useMemo(() => {
     const normalized = userSearch.trim().toLowerCase();
     return users.filter((candidate) => !normalized || [
@@ -969,7 +985,7 @@ export const ChatsPage: React.FC = () => {
                               )}
                               <div className={`group flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}>
                                 {!own && (
-                                  <UserAvatar name={message.author.name} avatar={message.author.avatar} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
+                                  <UserAvatar name={message.author.name} avatar={resolveProfileAvatar(message.authorId, message.author.avatar)} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
                                 )}
                                 <div className={`flex max-w-[86%] flex-col ${own ? 'items-end' : 'items-start'} sm:max-w-[72%]`}>
                                   {!own && <p className="mb-1 px-1 text-[11px] font-medium text-[#676d75]">{message.author.name}</p>}
@@ -1032,7 +1048,7 @@ export const ChatsPage: React.FC = () => {
                                   )}
                                 </div>
                                 {own && (
-                                  <UserAvatar name={message.author.name} avatar={message.author.avatar || user?.avatar} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
+                                  <UserAvatar name={message.author.name} avatar={resolveProfileAvatar(message.authorId, message.author.avatar)} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
                                 )}
                               </div>
                             </React.Fragment>
@@ -1077,7 +1093,7 @@ export const ChatsPage: React.FC = () => {
                             ) : (
                               <div className={`flex items-end gap-2 ${own ? 'justify-end' : 'justify-start'}`}>
                                 {item.type === 'message' && !own && (
-                                  <UserAvatar name={item.message.author?.name} avatar={item.message.author?.avatar} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
+                                  <UserAvatar name={item.message.author?.name} avatar={resolveProfileAvatar(item.message.authorId, item.message.author?.avatar)} className="h-7 w-7 bg-[#dde3ea] text-[10px] text-[#3f4f64]" />
                                 )}
                                 <div className={`max-w-[86%] rounded-[17px] px-3.5 py-2.5 sm:max-w-[72%] ${
                                   own
@@ -1125,7 +1141,7 @@ export const ChatsPage: React.FC = () => {
                                   <p className={`mt-1 text-right text-[10px] ${own ? 'text-white/55' : 'text-[#999]'}`}>{formatDateTime(item.createdAt)}</p>
                                 </div>
                                 {item.type === 'message' && own && (
-                                  <UserAvatar name={item.message.author?.name} avatar={item.message.author?.avatar || user?.avatar} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
+                                  <UserAvatar name={item.message.author?.name} avatar={resolveProfileAvatar(item.message.authorId, item.message.author?.avatar)} className="h-7 w-7 bg-[#2d3c54] text-[10px] text-white" />
                                 )}
                               </div>
                             )}
