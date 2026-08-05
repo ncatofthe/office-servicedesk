@@ -52,11 +52,19 @@ const STATUS_TRANSITIONS = {
 const TASK_OWNERSHIP_LOCKED_ERROR = 'Task is assigned to another agent';
 const TASK_REASSIGN_ADMIN_ONLY_ERROR = 'Only administrators can reassign tasks';
 const TASK_SERVICEDESK_FIELDS = ['folderId', 'entityId', 'typeId', 'subtypeId'];
-const TASK_UPDATE_FIELDS = ['title', 'description', 'priority', 'startDate', 'dueDate', 'progress', 'departmentId', 'requesterCloseRequired', 'assigneeIds', ...TASK_SERVICEDESK_FIELDS];
+const TASK_UPDATE_FIELDS = ['title', 'description', 'priority', 'startDate', 'dueDate', 'progress', 'departmentId', 'teamId', 'requesterCloseRequired', 'assigneeIds', ...TASK_SERVICEDESK_FIELDS];
 const TASK_UPDATE_MUTABLE_FIELDS = ['title', 'description', 'priority', 'startDate', 'dueDate', 'progress', 'departmentId', 'requesterCloseRequired'];
 const TASK_SUMMARY_INCLUDE = {
     department: {
         select: DEPARTMENT_PUBLIC_SELECT
+    },
+    team: {
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            isActive: true
+        }
     },
     folder: {
         select: {
@@ -145,6 +153,7 @@ const TASK_BRIEF_SELECT = {
     status: true,
     priority: true,
     sourceChannel: true,
+    teamId: true,
     folderId: true,
     entityId: true,
     typeId: true,
@@ -298,6 +307,24 @@ const assertAssignableAssigneeIds = async(ids, db = prisma) => {
     return uniqueIds;
 };
 
+const resolveAssignableTeamId = async(teamId, db = prisma) => {
+    if (teamId === undefined) return undefined;
+    if (teamId === null || teamId === '') return null;
+
+    const team = await db.supportTeam.findUnique({
+        where: { id: teamId },
+        select: { id: true, isActive: true }
+    });
+    if (!team) {
+        throw new Error('Команда исполнителей не найдена.');
+    }
+    if (!team.isActive) {
+        throw new Error('Нельзя назначить неактивную команду исполнителей.');
+    }
+
+    return team.id;
+};
+
 const assertTaskReadAccess = async(task, user, db = prisma) => {
     if (!task) {
         throw new Error('Task not found');
@@ -320,7 +347,9 @@ const assertTaskFolderManagementAccess = async(task, actor, db = prisma) => {
         return context;
     }
 
-    if (!context.isAgent || (task.folderId && !hasAgentFolderAccess(task, context.accessibleFolderIds))) {
+    const hasAssignedTeamAccess = Boolean(task.teamId && context.accessibleTeamIds.includes(task.teamId));
+    const hasQueueAccess = !task.teamId && (!task.folderId || hasAgentFolderAccess(task, context.accessibleFolderIds));
+    if (!context.isAgent || (!hasQueueAccess && !hasAssignedTeamAccess)) {
         throw new Error('Access denied');
     }
 
@@ -377,6 +406,7 @@ const mapTaskBrief = (task, overrides = {}) => {
         description: task.description,
         status,
         priority: task.priority,
+        teamId: task.teamId,
         folderId: task.folderId,
         entityId: task.entityId,
         typeId: task.typeId,
@@ -682,6 +712,7 @@ const getAll = async(user, filters = {}, limit = DEFAULT_TASK_LIST_LIMIT, offset
     }
     if (filters.authorId) where.authorId = filters.authorId;
     if (filters.assigneeId) where.assignees = { some: { userId: filters.assigneeId } };
+    if (filters.teamId) where.teamId = filters.teamId;
     if (filters.folderId) where.folderId = filters.folderId;
     if (filters.entityId) where.entityId = filters.entityId;
     if (filters.typeId) where.typeId = filters.typeId;
@@ -720,7 +751,7 @@ const getAll = async(user, filters = {}, limit = DEFAULT_TASK_LIST_LIMIT, offset
     } else if (accessContext.isAgent && !accessContext.isAdmin) {
         where.AND = [
             ...(where.AND || []),
-            buildAgentTaskAccessWhere(user.id, accessContext.accessibleFolderIds)
+            buildAgentTaskAccessWhere(user.id, accessContext.accessibleFolderIds, accessContext.accessibleTeamIds)
         ];
     }
 
@@ -730,7 +761,10 @@ const getAll = async(user, filters = {}, limit = DEFAULT_TASK_LIST_LIMIT, offset
             {
                 OR: [
                     { authorId: user.id },
-                    { assignees: { some: { userId: user.id } } }
+                    { assignees: { some: { userId: user.id } } },
+                    ...(accessContext.accessibleTeamIds.length > 0
+                        ? [{ teamId: { in: accessContext.accessibleTeamIds } }]
+                        : [])
                 ]
             }
         ];
@@ -819,6 +853,7 @@ const create = async(data, actor, options = {}) => {
         startDate,
         dueDate,
         departmentId,
+        teamId,
         assigneeIds = [],
         status = 'NEW',
         folderId,
@@ -840,17 +875,21 @@ const create = async(data, actor, options = {}) => {
     const canUseConfiguredDefaultFolder = !accessContext.isAgent
         || !configuredDefaultFolderId
         || hasAgentFolderAccess(configuredDefaultFolderId, accessContext.accessibleFolderIds);
-    const effectiveFolderId = folderId === undefined
-        ? (canUseConfiguredDefaultFolder ? configuredDefaultFolderId : null)
-        : folderId;
+    const fallbackFolderId = canUseConfiguredDefaultFolder ? configuredDefaultFolderId : null;
     const effectivePriority = priority === undefined ? productSettings.defaultPriority : priority;
     const resolvedDepartmentId = await resolveTaskDepartmentId(db, departmentId);
     const serviceDeskRefs = await resolveTaskServiceDeskReferences(db, {
-        folderId: effectiveFolderId,
+        ...(folderId !== undefined ? { folderId } : {}),
         entityId,
         typeId,
-        subtypeId
+        subtypeId,
+        applyRouting: true,
+        fallbackFolderId
     });
+    const resolvedTeamId = await resolveAssignableTeamId(
+        teamId !== undefined ? teamId : serviceDeskRefs.routingTeamId,
+        db
+    );
     const createdAt = new Date();
     const resolvedAt = status === 'DONE' ? createdAt : null;
     const slaFields = await buildPersistedSlaFieldsForTaskState({
@@ -871,7 +910,7 @@ const create = async(data, actor, options = {}) => {
     }
 
     const resolvedAssigneeIds = await assertAssignableAssigneeIds(assigneeIds, db);
-    if (!accessContext.isAdmin && resolvedAssigneeIds.length > 0) {
+    if (!accessContext.isAdmin && (resolvedAssigneeIds.length > 0 || teamId !== undefined)) {
         throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
     }
 
@@ -886,6 +925,7 @@ const create = async(data, actor, options = {}) => {
                 startDate: startDate ? new Date(startDate) : null,
                 dueDate: dueDate ? new Date(dueDate) : null,
                 departmentId: resolvedDepartmentId === undefined ? null : resolvedDepartmentId,
+                teamId: resolvedTeamId === undefined ? null : resolvedTeamId,
                 folderId: serviceDeskRefs.folderId === undefined ? null : serviceDeskRefs.folderId,
                 entityId: serviceDeskRefs.entityId === undefined ? null : serviceDeskRefs.entityId,
                 typeId: serviceDeskRefs.typeId === undefined ? null : serviceDeskRefs.typeId,
@@ -918,7 +958,8 @@ const create = async(data, actor, options = {}) => {
             description: title,
             metadata: {
                 status,
-                priority: effectivePriority
+                priority: effectivePriority,
+                teamId: resolvedTeamId || null
             },
             createdAt
         }, tx);
@@ -1011,22 +1052,48 @@ const update = async(id, data, actor) => {
         }
     }
 
+    if (Object.prototype.hasOwnProperty.call(payload, 'teamId')) {
+        const resolvedTeamId = await resolveAssignableTeamId(payload.teamId);
+        if (!isAdminRole(actor.role) && task.teamId !== resolvedTeamId) {
+            throw new Error(TASK_REASSIGN_ADMIN_ONLY_ERROR);
+        }
+        updateData.teamId = resolvedTeamId;
+    }
+
     const hasServiceDeskChanges = TASK_SERVICEDESK_FIELDS.some((field) =>
         Object.prototype.hasOwnProperty.call(payload, field)
     );
     if (hasServiceDeskChanges) {
+        const classificationChanged = ['typeId', 'subtypeId'].some((field) =>
+            Object.prototype.hasOwnProperty.call(payload, field)
+        );
         const finalServiceDeskRefs = {
-            folderId: Object.prototype.hasOwnProperty.call(payload, 'folderId') ? payload.folderId : task.folderId,
+            ...(Object.prototype.hasOwnProperty.call(payload, 'folderId')
+                ? { folderId: payload.folderId }
+                : classificationChanged
+                    ? {}
+                    : { folderId: task.folderId }),
             entityId: Object.prototype.hasOwnProperty.call(payload, 'entityId') ? payload.entityId : task.entityId,
             typeId: Object.prototype.hasOwnProperty.call(payload, 'typeId') ? payload.typeId : task.typeId,
-            subtypeId: Object.prototype.hasOwnProperty.call(payload, 'subtypeId') ? payload.subtypeId : task.subtypeId
+            subtypeId: Object.prototype.hasOwnProperty.call(payload, 'subtypeId')
+                ? payload.subtypeId
+                : Object.prototype.hasOwnProperty.call(payload, 'typeId')
+                    ? null
+                    : task.subtypeId,
+            applyRouting: classificationChanged,
+            fallbackFolderId: task.folderId
         };
         const resolvedServiceDeskRefs = await resolveTaskServiceDeskReferences(prisma, finalServiceDeskRefs);
 
         for (const field of TASK_SERVICEDESK_FIELDS) {
-            if (Object.prototype.hasOwnProperty.call(payload, field)) {
+            if (Object.prototype.hasOwnProperty.call(resolvedServiceDeskRefs, field)) {
                 updateData[field] = resolvedServiceDeskRefs[field];
             }
+        }
+        if (classificationChanged
+            && !Object.prototype.hasOwnProperty.call(payload, 'teamId')
+            && resolvedServiceDeskRefs.routingTeamId) {
+            updateData.teamId = await resolveAssignableTeamId(resolvedServiceDeskRefs.routingTeamId);
         }
     }
 
@@ -1075,6 +1142,26 @@ const update = async(id, data, actor) => {
         const changedFieldNames = Object.keys(updateData).filter((field) =>
             JSON.stringify(task[field]) !== JSON.stringify(updateData[field])
         );
+
+        if (changedFieldNames.includes('teamId')) {
+            const assignedTeam = updateData.teamId
+                ? await tx.supportTeam.findUnique({
+                    where: { id: updateData.teamId },
+                    select: { id: true, name: true }
+                })
+                : null;
+            await safeRecordTimelineEvent({
+                taskId: id,
+                actorId: actor.id,
+                type: 'TASK_UPDATED',
+                title: assignedTeam ? 'Назначена команда' : 'Команда снята',
+                description: assignedTeam?.name || null,
+                metadata: {
+                    teamId: assignedTeam?.id || null,
+                    teamName: assignedTeam?.name || null
+                }
+            }, tx);
+        }
 
         // Handle assignees separately
         if (assigneeIds !== null) {
@@ -1648,7 +1735,7 @@ const addAssignee = async(taskId, userId, actor) => {
     });
     if (!task) throw new Error('Task not found');
 
-    await assertTaskFolderManagementAccess(task, actor);
+    const accessContext = await assertTaskFolderManagementAccess(task, actor);
     await assertAssignableAssigneeIds([userId]);
     const isAdmin = isAdminRole(actor.role);
     if (!isAdmin && (!isAgentRole(actor.role) || userId !== actor.id)) {
@@ -1656,6 +1743,9 @@ const addAssignee = async(taskId, userId, actor) => {
     }
     if (task.status === 'DONE' && isAgentRole(actor.role) && userId === actor.id) {
         throw new Error('Исполнитель не может назначить себя на закрытую заявку.');
+    }
+    if (!isAdmin && task.teamId && !accessContext.accessibleTeamIds.includes(task.teamId)) {
+        throw new Error('Взять заявку может только участник назначенной команды.');
     }
 
     let assignee;

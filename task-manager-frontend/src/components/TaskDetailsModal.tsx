@@ -4,7 +4,7 @@ import { Modal } from './ui/Modal';
 import { UserAvatar } from './ui/UserAvatar';
 import { AssigneeCheckboxList } from './ui/AssigneeCheckboxList';
 import { CannedReplyPicker } from './canned-replies/CannedReplyPicker';
-import { tasksApi, commentsApi, filesApi, knowledgeApi } from '../api';
+import { tasksApi, commentsApi, filesApi, knowledgeApi, serviceDeskTeamsApi } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { getModuleVisibility } from '../access';
@@ -22,6 +22,7 @@ import type {
   TaskEmailThread,
   TaskEmailThreadItem,
   TaskPriority,
+  ServiceDeskTeam,
   TaskStatus,
   TaskSummary,
   TaskTimelineEvent,
@@ -473,6 +474,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
 }) => {
   const { user } = useAuth();
   const { isFeatureEnabled } = useProductSettings();
+  const emailEnabled = isFeatureEnabled('email');
+  const knowledgeEnabled = isFeatureEnabled('knowledge');
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [comments, setComments] = useState<TaskComment[]>([]);
   const [timeline, setTimeline] = useState<TaskTimelineEvent[]>([]);
@@ -510,6 +513,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [knowledgeArticles, setKnowledgeArticles] = useState<KnowledgeArticle[]>([]);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeError, setKnowledgeError] = useState('');
+  const [availableTeams, setAvailableTeams] = useState<ServiceDeskTeam[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
   const commentsListRef = useRef<HTMLDivElement>(null);
   const canUpdateStatus = getModuleVisibility(user?.role, 'tasks') !== 'read-only';
   const isAdmin = user?.role === 'ADMIN';
@@ -621,7 +626,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setTimelineError(getApiErrorMessage(updatedTimelineResult.error, 'Не удалось загрузить историю заявки.'));
     }
 
-    if (!isFeatureEnabled('email')) {
+    if (!emailEnabled) {
       setEmailThread(null);
       setEmailThreadError('');
     } else if (updatedEmailThreadResult.ok) {
@@ -631,7 +636,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setEmailThread(null);
       setEmailThreadError(getApiErrorMessage(updatedEmailThreadResult.error, 'Не удалось загрузить email-переписку.'));
     }
-  }, [isFeatureEnabled]);
+  }, [emailEnabled]);
 
   const fetchTaskContext = useCallback(async (id: string) => {
     const [updatedTask, updatedComments, updatedMergeResult, updatedTimelineResult, updatedEmailThreadResult] = await Promise.all([
@@ -639,7 +644,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       commentsApi.getByTask(id),
       tasksApi.getMergeInfo(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError })),
       tasksApi.getTimeline(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError })),
-      isFeatureEnabled('email')
+      emailEnabled
         ? tasksApi.getEmailThread(id).then((data) => ({ ok: true as const, data })).catch((actionError) => ({ ok: false as const, error: actionError }))
         : Promise.resolve({ ok: false as const, error: new Error('Email disabled') }),
     ]);
@@ -651,7 +656,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       updatedTimelineResult,
       updatedEmailThreadResult,
     };
-  }, [isFeatureEnabled]);
+  }, [emailEnabled]);
 
   useEffect(() => {
     if (!taskId || !open) return;
@@ -659,7 +664,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setLoading(true);
       setMergeInfoLoading(true);
       setTimelineLoading(true);
-      setEmailThreadLoading(isFeatureEnabled('email'));
+      setEmailThreadLoading(emailEnabled);
       setError('');
       setSuccessMessage('');
       setMergeInfoError('');
@@ -684,7 +689,31 @@ export const TaskDetailsModal: React.FC<Props> = ({
       }
     };
     load();
-  }, [taskId, open, isFeatureEnabled, fetchTaskContext, applyTaskContext]);
+  }, [taskId, open, emailEnabled, fetchTaskContext, applyTaskContext]);
+
+  useEffect(() => {
+    if (!open || !isAdmin) {
+      setAvailableTeams([]);
+      return;
+    }
+
+    let active = true;
+    setTeamsLoading(true);
+    serviceDeskTeamsApi.getAll({ adminFallback: true })
+      .then((teams) => {
+        if (active) setAvailableTeams(teams.filter((team) => team.isActive !== false));
+      })
+      .catch(() => {
+        if (active) setAvailableTeams([]);
+      })
+      .finally(() => {
+        if (active) setTeamsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isAdmin, open]);
 
   useEffect(() => {
     if (!open) {
@@ -694,7 +723,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   }, [open, taskId]);
 
   useEffect(() => {
-    if (!taskId || !open || !isFeatureEnabled('knowledge')) {
+    if (!taskId || !open || !knowledgeEnabled) {
       setKnowledgeSearch('');
       setKnowledgeArticles([]);
       setKnowledgeError('');
@@ -719,7 +748,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [isFeatureEnabled, knowledgeSearch, open, taskId]);
+  }, [knowledgeEnabled, knowledgeSearch, open, taskId]);
 
   useEffect(() => {
     if (!task) {
@@ -888,6 +917,24 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }
   };
 
+  const updateTaskTeam = async (nextTeamId: string) => {
+    if (!taskId || !task || !isAdmin || assignmentSaving) return;
+    const normalizedTeamId = nextTeamId || null;
+    if ((task.teamId || null) === normalizedTeamId) return;
+
+    setAssignmentSaving(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      await tasksApi.update(taskId, { teamId: normalizedTeamId });
+      await refreshTaskAndMergeInfo(normalizedTeamId ? 'Команда назначена.' : 'Команда снята с заявки.');
+    } catch (actionError) {
+      setError(getApiErrorMessage(actionError, 'Не удалось изменить команду исполнителей.'));
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
   const deleteTask = async () => {
     if (!taskId || !task || !isAdmin) {
       return;
@@ -947,29 +994,20 @@ export const TaskDetailsModal: React.FC<Props> = ({
       return;
     }
 
-    setMergeInfoLoading(true);
-    setTimelineLoading(true);
-    setEmailThreadLoading(true);
-    try {
-      const context = await fetchTaskContext(taskId);
-      applyTaskContext(
-        context.updatedTask,
-        context.updatedComments,
-        context.updatedMergeResult,
-        context.updatedTimelineResult,
-        context.updatedEmailThreadResult
-      );
+    const context = await fetchTaskContext(taskId);
+    applyTaskContext(
+      context.updatedTask,
+      context.updatedComments,
+      context.updatedMergeResult,
+      context.updatedTimelineResult,
+      context.updatedEmailThreadResult
+    );
 
-      if (successText) {
-        setSuccessMessage(successText);
-      }
-
-      onTaskUpdated?.(context.updatedTask);
-    } finally {
-      setMergeInfoLoading(false);
-      setTimelineLoading(false);
-      setEmailThreadLoading(false);
+    if (successText) {
+      setSuccessMessage(successText);
     }
+
+    onTaskUpdated?.(context.updatedTask);
   };
 
   const openMergeDialog = () => {
@@ -1137,6 +1175,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     <p className="text-sm font-semibold text-[#26364f]">{requesterStatus?.title || getStatusLabel(task.status)}</p>
                     <p className="mt-1 text-xs leading-5 text-[#647086]">{requesterStatus?.description}</p>
                     <div className="mt-3 text-xs text-[#5f6878]">
+                      <div className="flex items-center gap-2">
+                        <span>Команда:</span>
+                        <span className="font-semibold text-[#273448]">{task.team?.name || 'ещё не назначена'}</span>
+                      </div>
                       <span>Исполнители:</span>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {task.assignees.length > 0 ? task.assignees.map((assignee) => (
@@ -1185,8 +1227,33 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     )}
                   </div>
                   <div className="mt-3 rounded-[10px] border border-[#e1e4e8] bg-white p-3" data-testid="task-assignees-panel">
+                    <div className="border-b border-[#eceff3] pb-3">
+                      <p className="text-xs font-semibold text-[#3f4752]">Команда исполнителей</p>
+                      {isAdmin ? (
+                        <select
+                          className="input mt-2"
+                          value={task.teamId || ''}
+                          onChange={(event) => void updateTaskTeam(event.target.value)}
+                          disabled={assignmentSaving || teamsLoading}
+                          data-testid="task-team-select"
+                        >
+                          <option value="">Не назначена</option>
+                          {task.team && !availableTeams.some((team) => team.id === task.team?.id) && (
+                            <option value={task.team.id}>{task.team.name}</option>
+                          )}
+                          {availableTeams.map((team) => (
+                            <option key={team.id} value={team.id}>{team.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <p className="mt-2 text-xs font-medium text-[#3b4149]">{task.team?.name || 'Команда пока не назначена.'}</p>
+                      )}
+                      {task.team?.description && (
+                        <p className="mt-1 text-[10px] leading-4 text-[#7d848d]">{task.team.description}</p>
+                      )}
+                    </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-[#3f4752]">Исполнители</p>
+                      <p className="mt-3 text-xs font-semibold text-[#3f4752]">Личные исполнители</p>
                       <span className="text-[10px] text-[#8b929a]">{task.assignees.length}</span>
                     </div>
                     {isAdmin && (

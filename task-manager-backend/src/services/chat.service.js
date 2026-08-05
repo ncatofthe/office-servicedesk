@@ -9,6 +9,7 @@ const {
 } = require('../utils/attachment.utils.js');
 const taskService = require('./task.service.js');
 const productSettingsService = require('./product-settings.service.js');
+const { queueChatMemberAddedEmail } = require('./chat-email-notification.service.js');
 const { normalizeAvatarDataUrl } = require('../utils/avatar.js');
 
 const CHAT_USER_SELECT = {
@@ -193,6 +194,19 @@ const deleteStoredFiles = (storedPaths = []) => {
             }
         }
     });
+};
+
+const notifyMemberAddedByEmail = async(payload) => {
+    try {
+        await queueChatMemberAddedEmail(payload);
+    } catch (error) {
+        console.warn('[chat-email] Failed to queue member-added notification', {
+            chatId: payload.chatId || null,
+            taskId: payload.taskId || null,
+            memberId: payload.member?.id || null,
+            error: error.message
+        });
+    }
 };
 
 const assertChatsEnabled = async(kind = null) => {
@@ -525,11 +539,16 @@ const addMember = async(chatId, actor, targetUserId) => {
     }
     const target = await prisma.user.findFirst({
         where: { id: targetUserId, isActive: true },
-        select: { id: true }
+        select: CHAT_USER_SELECT
     });
     if (!target) throw new Error('Пользователь не найден.');
 
-    await prisma.$transaction(async(tx) => {
+    const addedMembership = await prisma.$transaction(async(tx) => {
+        const existing = await tx.chatMember.findUnique({
+            where: { chatId_userId: { chatId, userId: targetUserId } }
+        });
+        if (existing) return null;
+
         if (membership.chat.kind === 'DIRECT') {
             await tx.chatThread.update({
                 where: { id: chatId },
@@ -540,14 +559,26 @@ const addMember = async(chatId, actor, targetUserId) => {
                 }
             });
         }
-        await tx.chatMember.upsert({
-            where: { chatId_userId: { chatId, userId: targetUserId } },
-            update: {},
-            create: { chatId, userId: targetUserId }
+        return tx.chatMember.create({
+            data: { chatId, userId: targetUserId }
         });
     });
 
-    return loadThread(chatId, actor.id);
+    const thread = await loadThread(chatId, actor.id);
+    if (addedMembership) {
+        const fallbackTitle = thread.members
+            .map((item) => item.user.name || item.user.email)
+            .filter(Boolean)
+            .join(', ');
+        await notifyMemberAddedByEmail({
+            membershipId: addedMembership.id,
+            chatId,
+            chatTitle: thread.title || fallbackTitle || 'Групповой чат',
+            member: target,
+            addedBy: actor
+        });
+    }
+    return thread;
 };
 
 const removeMember = async(chatId, actor, targetUserId) => {
@@ -626,26 +657,42 @@ const addTicketMember = async(taskId, actor, targetUserId) => {
     await taskService.getById(taskId, actor);
     const target = await prisma.user.findFirst({
         where: { id: targetUserId, isActive: true },
-        select: { id: true }
+        select: CHAT_USER_SELECT
     });
     if (!target) throw new Error('Пользователь не найден.');
     const task = await prisma.task.findUnique({
         where: { id: taskId },
         select: {
+            title: true,
+            ticketNumber: true,
             authorId: true,
             assignees: { select: { userId: true } }
         }
     });
     if (!task) throw new Error('Task not found');
+    let addedParticipant = null;
     if (task.authorId !== targetUserId && !task.assignees.some((assignee) => assignee.userId === targetUserId)) {
-        await prisma.taskChatParticipant.upsert({
-            where: { taskId_userId: { taskId, userId: targetUserId } },
-            update: {},
-            create: {
-                taskId,
-                userId: targetUserId,
-                addedById: actor.id
-            }
+        const existing = await prisma.taskChatParticipant.findUnique({
+            where: { taskId_userId: { taskId, userId: targetUserId } }
+        });
+        if (!existing) {
+            addedParticipant = await prisma.taskChatParticipant.create({
+                data: {
+                    taskId,
+                    userId: targetUserId,
+                    addedById: actor.id
+                }
+            });
+        }
+    }
+    if (addedParticipant) {
+        const ticketLabel = task.ticketNumber ? `Заявка #${task.ticketNumber}` : 'Заявка';
+        await notifyMemberAddedByEmail({
+            membershipId: addedParticipant.id,
+            taskId,
+            chatTitle: `${ticketLabel}: ${task.title}`,
+            member: target,
+            addedBy: actor
         });
     }
     return listTicketMembers(taskId, actor);

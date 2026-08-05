@@ -390,6 +390,7 @@ const serializeTaskBase = (task, overrides = {}) => {
         dueDate: toIsoString(presentation.dueDate),
         progress: presentation.progress,
         departmentId: Object.prototype.hasOwnProperty.call(presentation, 'departmentId') ? presentation.departmentId : undefined,
+        teamId: Object.prototype.hasOwnProperty.call(presentation, 'teamId') ? presentation.teamId : undefined,
         folderId: Object.prototype.hasOwnProperty.call(presentation, 'folderId') ? presentation.folderId : undefined,
         entityId: Object.prototype.hasOwnProperty.call(presentation, 'entityId') ? presentation.entityId : undefined,
         typeId: Object.prototype.hasOwnProperty.call(presentation, 'typeId') ? presentation.typeId : undefined,
@@ -427,6 +428,17 @@ const serializeTaskSummary = (task, overrides = {}) => {
 
     if (Object.prototype.hasOwnProperty.call(task, 'department')) {
         summary.department = serializeTaskDepartment(task.department);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(task, 'team')) {
+        summary.team = task.team
+            ? {
+                id: task.team.id,
+                name: task.team.name,
+                description: task.team.description ?? null,
+                isActive: task.team.isActive
+            }
+            : null;
     }
 
     if (Object.prototype.hasOwnProperty.call(task, 'folder')) {

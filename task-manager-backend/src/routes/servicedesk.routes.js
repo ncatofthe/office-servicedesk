@@ -48,6 +48,10 @@ const entityBindingValidation = [
     body('entityId').optional({ nullable: true }).isString().withMessage('entityId должен быть строкой или null.')
 ];
 
+const teamBindingValidation = [
+    body('teamId').optional({ nullable: true }).isString().withMessage('teamId должен быть строкой или null.')
+];
+
 const automationRuleBaseValidation = [
     body('name').optional().trim().isLength({ min: 1, max: 255 }).withMessage('Название должно быть от 1 до 255 символов.'),
     body('description').optional({ nullable: true }).isString().withMessage('Описание должно быть строкой или null.'),
@@ -181,6 +185,7 @@ router.post(
     codedRefValidation,
     folderBindingValidation,
     entityBindingValidation,
+    teamBindingValidation,
     validate,
     controller.createType
 );
@@ -210,6 +215,7 @@ router.patch(
     codedRefUpdateValidation,
     folderBindingValidation,
     entityBindingValidation,
+    teamBindingValidation,
     validate,
     controller.updateType
 );
@@ -222,6 +228,7 @@ router.post(
     codedRefValidation,
     body('typeId').isString().withMessage('typeId обязателен.'),
     folderBindingValidation,
+    teamBindingValidation,
     validate,
     controller.createSubtype
 );
@@ -232,6 +239,7 @@ router.patch(
     codedRefUpdateValidation,
     body('typeId').optional().isString().withMessage('typeId должен быть строкой.'),
     folderBindingValidation,
+    teamBindingValidation,
     validate,
     controller.updateSubtype
 );

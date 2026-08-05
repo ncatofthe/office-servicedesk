@@ -38,6 +38,13 @@ const OUTBOX_ADMIN_INCLUDE = {
             title: true
         }
     },
+    chat: {
+        select: {
+            id: true,
+            title: true,
+            kind: true
+        }
+    },
     comment: {
         select: {
             id: true,
@@ -345,6 +352,7 @@ const claimOutboxRecord = async(db, outboxId, config, claimOptions = {}) => {
 const createOutboxBaseRecord = async({
     db = prisma,
     taskId,
+    chatId,
     commentId,
     actorId,
     dedupeKey,
@@ -354,7 +362,8 @@ const createOutboxBaseRecord = async({
     return db.emailOutboundMessage.create({
         data: {
             dedupeKey: dedupeKey || null,
-            taskId,
+            taskId: taskId || null,
+            chatId: chatId || null,
             commentId: commentId || null,
             recipientEmail: payload.to,
             recipientName: payload.recipientName,
@@ -499,9 +508,13 @@ const queueOutboundEmail = async(payloadInput, options = {}) => {
         ...(options.config || {})
     };
     const taskId = String(payloadInput?.taskId || '').trim();
+    const chatId = String(payloadInput?.chatId || '').trim();
     const dedupeKey = String(payloadInput?.dedupeKey || '').trim() || null;
-    if (!taskId) {
-        throw new Error('taskId обязателен для записи email в outbox.');
+    if (!taskId && !chatId) {
+        throw new Error('taskId или chatId обязателен для записи email в outbox.');
+    }
+    if (taskId && chatId) {
+        throw new Error('Email outbox должен относиться либо к заявке, либо к чату.');
     }
 
     const payload = {
@@ -535,6 +548,7 @@ const queueOutboundEmail = async(payloadInput, options = {}) => {
         outbox = await createOutboxBaseRecord({
             db,
             taskId,
+            chatId,
             commentId: payloadInput?.commentId || null,
             actorId: payloadInput?.actorId || null,
             dedupeKey,

@@ -110,8 +110,10 @@ const serializeType = (type, options = {}) => {
         isActive: type.isActive,
         folderId: type.folderId ?? null,
         entityId: type.entityId ?? null,
+        teamId: type.teamId ?? null,
         folder: serializeFolder(type.folder, options),
         entity: serializeEntity(type.entity, options),
+        team: serializeTeam(type.team, { ...options, includeMembers: false, includeCounts: false }),
         createdAt: serializeNullableDate(type.createdAt),
         updatedAt: serializeNullableDate(type.updatedAt),
         counts: options.includeCounts !== false && type._count
@@ -135,8 +137,10 @@ const serializeSubtype = (subtype, options = {}) => {
         isActive: subtype.isActive,
         typeId: subtype.typeId,
         folderId: subtype.folderId ?? null,
+        teamId: subtype.teamId ?? null,
         type: serializeType(subtype.type, options),
         folder: serializeFolder(subtype.folder, options),
+        team: serializeTeam(subtype.team, { ...options, includeMembers: false, includeCounts: false }),
         createdAt: serializeNullableDate(subtype.createdAt),
         updatedAt: serializeNullableDate(subtype.updatedAt),
         counts: options.includeCounts !== false && subtype._count

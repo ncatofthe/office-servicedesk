@@ -281,6 +281,9 @@ export interface ServiceDeskTicketType extends ServiceDeskDictionaryItem {
   code?: string | null;
   folderId?: string | null;
   entityId?: string | null;
+  teamId?: string | null;
+  folder?: ServiceDeskFolder | null;
+  team?: ServiceDeskTeam | null;
   slaId?: string | null;
   counts?: {
     tasks?: number;
@@ -294,6 +297,10 @@ export interface ServiceDeskTicketSubtype extends ServiceDeskDictionaryItem {
   code?: string | null;
   typeId?: string | null;
   folderId?: string | null;
+  teamId?: string | null;
+  type?: ServiceDeskTicketType | null;
+  folder?: ServiceDeskFolder | null;
+  team?: ServiceDeskTeam | null;
   counts?: {
     tasks?: number;
     slaPolicies?: number;
@@ -353,6 +360,7 @@ export interface ServiceDeskDictionaryInput {
   folderIds?: string[];
   typeId?: string | null;
   entityId?: string | null;
+  teamId?: string | null;
   code?: string | null;
   userIds?: string[];
   assigneeIds?: string[];
@@ -564,7 +572,8 @@ export interface TaskEmailThread {
 
 export interface EmailOutboxItem {
   id: string;
-  taskId: string;
+  taskId?: string | null;
+  chatId?: string | null;
   commentId?: string | null;
   recipientEmail: string;
   recipientName?: string | null;
@@ -587,6 +596,11 @@ export interface EmailOutboxItem {
     id: string;
     ticketNumber?: number | null;
     title: string;
+  } | null;
+  chat?: {
+    id: string;
+    title?: string | null;
+    kind: ChatKind;
   } | null;
   comment?: {
     id: string;
@@ -632,10 +646,11 @@ export interface EmailSettingsAdmin {
   outboundEnabled: boolean; smtpHost: string; smtpPort: number; smtpSecure: boolean; smtpUser?: string | null; smtpPasswordConfigured: boolean;
   fromAddress?: string | null; fromName: string; workerEnabled: boolean; workerIntervalMs: number; workerBatchSize: number; lockTtlMs: number;
   maxAttempts: number; retryDelayMinutes: number; notificationsEnabled: boolean; notifyRequesterCreated: boolean; notifyRequesterComment: boolean;
-  notifyRequesterStatus: boolean; notifyRequesterAssigned: boolean; notifyAssigneeAssigned: boolean; portalBaseUrl?: string | null;
+  notifyRequesterStatus: boolean; notifyRequesterAssigned: boolean; notifyAssigneeAssigned: boolean; notifyChatMemberAdded: boolean; notifyTeamNewTask: boolean; portalBaseUrl?: string | null;
   createdSubjectTemplate: string; createdBodyTemplate: string; commentSubjectTemplate: string; commentBodyTemplate: string;
   statusSubjectTemplate: string; statusBodyTemplate: string; assignedSubjectTemplate: string; assignedBodyTemplate: string;
-  assigneeSubjectTemplate: string; assigneeBodyTemplate: string;
+  assigneeSubjectTemplate: string; assigneeBodyTemplate: string; chatMemberSubjectTemplate: string; chatMemberBodyTemplate: string;
+  teamNewTaskSubjectTemplate: string; teamNewTaskBodyTemplate: string;
 }
 
 export type UpdateEmailSettingsInput = Partial<EmailSettingsAdmin> & { imapPassword?: string; smtpPassword?: string; clearImapPassword?: boolean; clearSmtpPassword?: boolean };

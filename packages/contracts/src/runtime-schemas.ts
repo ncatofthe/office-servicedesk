@@ -294,6 +294,7 @@ export const createTaskRequestRuntimeSchema =
       startDate: readOptionalStrictString(payload, 'startDate'),
       dueDate: readOptionalStrictString(payload, 'dueDate'),
       departmentId: readOptionalString(payload, 'departmentId', { allowNull: true }),
+      teamId: readOptionalString(payload, 'teamId', { allowNull: true }),
       assigneeIds: readOptionalStringArray(payload, 'assigneeIds')
     };
 
@@ -305,6 +306,7 @@ export const createTaskRequestRuntimeSchema =
     if (normalized.startDate !== undefined) result.startDate = normalized.startDate;
     if (normalized.dueDate !== undefined) result.dueDate = normalized.dueDate;
     if (normalized.departmentId !== undefined) result.departmentId = normalized.departmentId;
+    if (normalized.teamId !== undefined) result.teamId = normalized.teamId;
     if (normalized.assigneeIds !== undefined) result.assigneeIds = normalized.assigneeIds;
 
     return result;
@@ -322,6 +324,7 @@ export const updateTaskRequestRuntimeSchema =
       dueDate: readOptionalString(payload, 'dueDate', { allowNull: true }),
       progress: readOptionalNumber(payload, 'progress'),
       departmentId: readOptionalString(payload, 'departmentId', { allowNull: true }),
+      teamId: readOptionalString(payload, 'teamId', { allowNull: true }),
       requesterCloseRequired: readOptionalBoolean(payload, 'requesterCloseRequired'),
       assigneeIds: readOptionalStringArray(payload, 'assigneeIds')
     };

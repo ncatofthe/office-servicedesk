@@ -28,7 +28,7 @@ const envSettings = () => ({
     maxAttempts: int(process.env.EMAIL_OUTBOX_MAX_ATTEMPTS, 5), retryDelayMinutes: int(process.env.EMAIL_OUTBOUND_RETRY_DELAY_MINUTES, 15),
     notificationsEnabled: bool(process.env.EMAIL_NOTIFICATIONS_ENABLED), notifyRequesterCreated: true, notifyRequesterComment: true,
     notifyRequesterStatus: true, notifyRequesterAssigned: false, portalBaseUrl: process.env.PORTAL_BASE_URL || null,
-    notifyAssigneeAssigned: true,
+    notifyAssigneeAssigned: true, notifyChatMemberAdded: true, notifyTeamNewTask: true,
     createdSubjectTemplate: '[Заявка #{{ticketNumber}}] Заявка принята: {{title}}',
     createdBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}',
     commentSubjectTemplate: '[Заявка #{{ticketNumber}}] Новый ответ: {{title}}',
@@ -38,7 +38,11 @@ const envSettings = () => ({
     assignedSubjectTemplate: '[Заявка #{{ticketNumber}}] Назначен исполнитель',
     assignedBodyTemplate: 'Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}',
     assigneeSubjectTemplate: '[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}',
-    assigneeBodyTemplate: 'Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}'
+    assigneeBodyTemplate: 'Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}',
+    chatMemberSubjectTemplate: '[Чат] Вас добавили: {{chatTitle}}',
+    chatMemberBodyTemplate: 'Здравствуйте, {{memberName}}!\n\nВас добавили в чат «{{chatTitle}}».\nДобавил: {{addedByName}}.\n\n{{portalLink}}',
+    teamNewTaskSubjectTemplate: '[Команда {{teamName}}] Новая заявка #{{ticketNumber}}: {{title}}',
+    teamNewTaskBodyTemplate: 'Здравствуйте, {{memberName}}!\n\nВ очереди команды «{{teamName}}» появилась новая заявка #{{ticketNumber}} «{{title}}».\nПапка: {{folderName}}\nТип: {{typeName}}\nПодтип: {{subtypeName}}\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}'
 });
 
 let cached = envSettings();
@@ -70,7 +74,7 @@ const publicSettings = (settings = cached) => {
     return { ...safe, imapPasswordConfigured: Boolean(imapPassword), smtpPasswordConfigured: Boolean(smtpPassword) };
 };
 
-const editable = ['intakeEnabled','imapHost','imapPort','imapSecure','imapUser','mailbox','intakeStartUid','intakeMaxMessages','intakePollIntervalMs','attachmentMaxBytes','defaultFolderId','defaultEntityId','defaultTypeId','defaultSubtypeId','outboundEnabled','smtpHost','smtpPort','smtpSecure','smtpUser','fromAddress','fromName','workerEnabled','workerIntervalMs','workerBatchSize','lockTtlMs','maxAttempts','retryDelayMinutes','notificationsEnabled','notifyRequesterCreated','notifyRequesterComment','notifyRequesterStatus','notifyRequesterAssigned','notifyAssigneeAssigned','portalBaseUrl','createdSubjectTemplate','createdBodyTemplate','commentSubjectTemplate','commentBodyTemplate','statusSubjectTemplate','statusBodyTemplate','assignedSubjectTemplate','assignedBodyTemplate','assigneeSubjectTemplate','assigneeBodyTemplate'];
+const editable = ['intakeEnabled','imapHost','imapPort','imapSecure','imapUser','mailbox','intakeStartUid','intakeMaxMessages','intakePollIntervalMs','attachmentMaxBytes','defaultFolderId','defaultEntityId','defaultTypeId','defaultSubtypeId','outboundEnabled','smtpHost','smtpPort','smtpSecure','smtpUser','fromAddress','fromName','workerEnabled','workerIntervalMs','workerBatchSize','lockTtlMs','maxAttempts','retryDelayMinutes','notificationsEnabled','notifyRequesterCreated','notifyRequesterComment','notifyRequesterStatus','notifyRequesterAssigned','notifyAssigneeAssigned','notifyChatMemberAdded','notifyTeamNewTask','portalBaseUrl','createdSubjectTemplate','createdBodyTemplate','commentSubjectTemplate','commentBodyTemplate','statusSubjectTemplate','statusBodyTemplate','assignedSubjectTemplate','assignedBodyTemplate','assigneeSubjectTemplate','assigneeBodyTemplate','chatMemberSubjectTemplate','chatMemberBodyTemplate','teamNewTaskSubjectTemplate','teamNewTaskBodyTemplate'];
 const updateEmailSettings = async(payload, db = prisma) => {
     const current = cached || envSettings(); const persisted = await db.emailSettings.findUnique({ where: { id: SETTINGS_ID } });
     const data = persisted ? {} : Object.fromEntries(editable.map((name) => [name, current[name]]));

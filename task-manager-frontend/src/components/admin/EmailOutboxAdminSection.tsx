@@ -431,7 +431,9 @@ export const EmailOutboxAdminSection: React.FC = () => {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-[#1f1f1f] break-all">{item.subject || 'Без темы'}</p>
                     <p className="text-xs text-[#8a8a8a]">
-                      {item.task?.ticketNumber ? `#${item.task.ticketNumber}` : item.taskId} · {formatDateTime(item.createdAt)}
+                      {item.task?.ticketNumber
+                        ? `#${item.task.ticketNumber}`
+                        : (item.chat?.title || (item.chatId ? 'Уведомление чата' : item.taskId || 'Системное письмо'))} · {formatDateTime(item.createdAt)}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

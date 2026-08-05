@@ -46,18 +46,31 @@ const getAgentAccessibleFolderIds = async(userId, db = prisma) => {
     return [...new Set(folderIds)];
 };
 
-const buildAgentTaskAccessWhere = (userId, accessibleFolderIds) => {
+const getAgentAccessibleTeamIds = async(userId, db = prisma) => {
+    const memberships = await db.supportTeamMember.findMany({
+        where: {
+            userId,
+            team: { isActive: true }
+        },
+        select: { teamId: true }
+    });
+
+    return memberships.map((membership) => membership.teamId);
+};
+
+const buildAgentTaskAccessWhere = (userId, accessibleFolderIds, accessibleTeamIds = []) => {
     const folderScope = accessibleFolderIds.length > 0
-        ? [{ folderId: { in: accessibleFolderIds } }]
+        ? [{ AND: [{ teamId: null }, { folderId: { in: accessibleFolderIds } }] }]
         : [];
 
     return {
         OR: [
             ...folderScope,
+            ...(accessibleTeamIds.length > 0 ? [{ teamId: { in: accessibleTeamIds } }] : []),
             // Web-created tickets may intentionally have only title/description.
             // Until an admin/agent routes them into a folder, every agent should
             // see them in the unprocessed pool instead of letting them disappear.
-            { folderId: null },
+            { AND: [{ teamId: null }, { folderId: null }] },
             { assignees: { some: { userId } } },
             { chatParticipants: { some: { userId } } }
         ]
@@ -70,14 +83,20 @@ const getTaskAccessContext = async(user, db = prisma) => {
     const isAgent = isAgentRole(role);
     const isRequester = isRequesterRole(role);
     const isViewer = isViewerRole(role);
-    const accessibleFolderIds = isAgent ? await getAgentAccessibleFolderIds(user.id, db) : [];
+    const [accessibleFolderIds, accessibleTeamIds] = isAgent
+        ? await Promise.all([
+            getAgentAccessibleFolderIds(user.id, db),
+            getAgentAccessibleTeamIds(user.id, db)
+        ])
+        : [[], []];
 
     return {
         isAdmin,
         isAgent,
         isRequester,
         isViewer,
-        accessibleFolderIds
+        accessibleFolderIds,
+        accessibleTeamIds
     };
 };
 
@@ -96,8 +115,12 @@ const hasTaskAccess = (task, user, context) => {
         && task.chatParticipants.some((participant) => participant.userId === user.id);
     if (context.isRequester) return task.authorId === user.id || isChatParticipant;
     if (context.isAgent) {
-        return !task.folderId
-            || hasAgentFolderAccess(task, context.accessibleFolderIds)
+        const hasTeamAccess = Boolean(task.teamId && context.accessibleTeamIds.includes(task.teamId));
+        const hasQueueAccess = !task.teamId && (
+            !task.folderId || hasAgentFolderAccess(task, context.accessibleFolderIds)
+        );
+        return hasTeamAccess
+            || hasQueueAccess
             || task.assignees.some((assignee) => assignee.userId === user.id)
             || isChatParticipant;
     }
@@ -107,6 +130,7 @@ const hasTaskAccess = (task, user, context) => {
 
 module.exports = {
     getAgentAccessibleFolderIds,
+    getAgentAccessibleTeamIds,
     buildAgentTaskAccessWhere,
     getTaskAccessContext,
     hasAgentFolderAccess,

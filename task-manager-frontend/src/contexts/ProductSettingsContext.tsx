@@ -21,7 +21,12 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   const [isAvailable, setIsAvailable] = useState(true);
 
   const applySettings = useCallback((nextSettings: ProductSettings) => {
-    setSettings(nextSettings);
+    setSettings((currentSettings) => {
+      if (currentSettings && JSON.stringify(currentSettings) === JSON.stringify(nextSettings)) {
+        return currentSettings;
+      }
+      return nextSettings;
+    });
     setIsAvailable(true);
     setRuntimeLocale(nextSettings.locale, nextSettings.timezone);
     document.documentElement.lang = nextSettings.locale;
@@ -58,14 +63,19 @@ export const ProductSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     };
   }, [refreshSettings]);
 
+  const checkFeatureEnabled = useCallback(
+    (feature: ProductFeatureKey) => isFeatureEnabled(settings, feature),
+    [settings]
+  );
+
   const value = useMemo(() => ({
     settings,
     isLoading,
     isAvailable,
     refreshSettings,
     applySettings,
-    isFeatureEnabled: (feature: ProductFeatureKey) => isFeatureEnabled(settings, feature),
-  }), [applySettings, isAvailable, isLoading, refreshSettings, settings]);
+    isFeatureEnabled: checkFeatureEnabled,
+  }), [applySettings, checkFeatureEnabled, isAvailable, isLoading, refreshSettings, settings]);
 
   return (
     <ProductSettingsContext.Provider value={value}>

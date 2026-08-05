@@ -1,4 +1,8 @@
 const resolveTaskServiceDeskReferences = async(db, refs) => {
+    const applyRouting = refs.applyRouting === true;
+    const fallbackFolderId = Object.prototype.hasOwnProperty.call(refs, 'fallbackFolderId')
+        ? refs.fallbackFolderId
+        : undefined;
     const finalRefs = {
         folderId: Object.prototype.hasOwnProperty.call(refs, 'folderId') ? refs.folderId : undefined,
         entityId: Object.prototype.hasOwnProperty.call(refs, 'entityId') ? refs.entityId : undefined,
@@ -54,7 +58,7 @@ const resolveTaskServiceDeskReferences = async(db, refs) => {
         } else {
             type = await db.ticketType.findFirst({
                 where: { id: finalRefs.typeId, isActive: true },
-                select: { id: true, folderId: true, entityId: true }
+                select: { id: true, folderId: true, entityId: true, teamId: true }
             });
             if (!type) {
                 throw new Error('Активный тип заявки не найден.');
@@ -75,11 +79,13 @@ const resolveTaskServiceDeskReferences = async(db, refs) => {
                     id: true,
                     typeId: true,
                     folderId: true,
+                    teamId: true,
                     type: {
                         select: {
                             id: true,
                             folderId: true,
-                            entityId: true
+                            entityId: true,
+                            teamId: true
                         }
                     }
                 }
@@ -96,6 +102,8 @@ const resolveTaskServiceDeskReferences = async(db, refs) => {
     const effectiveTypeId = finalRefs.typeId === undefined ? undefined : resolved.typeId;
     const effectiveSubtypeId = finalRefs.subtypeId === undefined ? undefined : resolved.subtypeId;
     const effectiveType = type || (subtype ? subtype.type : null);
+    const routingFolderId = subtype?.folderId || effectiveType?.folderId || null;
+    const routingTeamId = subtype?.teamId || effectiveType?.teamId || null;
 
     if (effectiveSubtypeId && !effectiveTypeId) {
         throw new Error('При выборе подтипа нужно указать тип заявки.');
@@ -109,15 +117,30 @@ const resolveTaskServiceDeskReferences = async(db, refs) => {
         throw new Error('Тип заявки привязан к другой сущности.');
     }
 
-    if (effectiveFolderId && effectiveType && effectiveType.folderId && effectiveType.folderId !== effectiveFolderId) {
-        throw new Error('Тип заявки привязан к другой папке.');
+    if (effectiveFolderId && routingFolderId && routingFolderId !== effectiveFolderId) {
+        throw new Error('Для выбранного типа или подтипа настроена другая папка маршрутизации.');
     }
 
-    if (effectiveFolderId && subtype && subtype.folderId && subtype.folderId !== effectiveFolderId) {
-        throw new Error('Подтип заявки привязан к другой папке.');
+    if (applyRouting && finalRefs.folderId === undefined) {
+        const nextFolderId = routingFolderId || fallbackFolderId;
+        if (nextFolderId === null) {
+            resolved.folderId = null;
+        } else if (nextFolderId !== undefined) {
+            const routedFolder = await db.ticketFolder.findFirst({
+                where: { id: nextFolderId, isActive: true },
+                select: { id: true }
+            });
+            if (!routedFolder) {
+                throw new Error('Активная папка маршрутизации не найдена.');
+            }
+            resolved.folderId = routedFolder.id;
+        }
     }
 
-    return resolved;
+    return {
+        ...resolved,
+        ...(applyRouting ? { routingTeamId } : {})
+    };
 };
 
 module.exports = {

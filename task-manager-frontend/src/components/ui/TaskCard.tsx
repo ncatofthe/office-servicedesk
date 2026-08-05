@@ -43,6 +43,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onClick }) => {
                 {task.folder?.name || task.department?.name}
               </span>
             )}
+            {task.team?.name && (
+              <span className="rounded-[8px] border border-[#d9e0ef] bg-[#f4f7ff] px-2 py-1 text-[11px] font-medium text-[#47547f]">
+                {task.team.name}
+              </span>
+            )}
           </div>
           <div className="line-clamp-2 text-[17px] font-semibold leading-tight text-[#1b1b1b]">{task.title}</div>
         </div>

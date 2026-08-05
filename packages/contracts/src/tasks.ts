@@ -34,6 +34,13 @@ export interface TaskAssigneeDto {
   user: TaskAssigneeUserDto;
 }
 
+export interface TaskTeamDto {
+  id: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+}
+
 export interface TaskCommentAuthorDto {
   id: string;
   name: string;
@@ -108,6 +115,7 @@ export interface TaskBaseDto {
   dueDate?: string | null;
   progress: number;
   departmentId?: string | null;
+  teamId?: string | null;
   folderId?: string | null;
   entityId?: string | null;
   typeId?: string | null;
@@ -122,6 +130,7 @@ export interface TaskBaseDto {
 
 export interface TaskSummaryDto extends TaskBaseDto {
   department?: DepartmentSummaryDto | null;
+  team?: TaskTeamDto | null;
   author?: TaskAuthorDto;
   assignees?: TaskAssigneeDto[];
   sla?: TaskSlaDto;
@@ -148,6 +157,7 @@ export interface TasksListQueryDto {
   sortOrder?: 'asc' | 'desc';
   authorId?: string;
   assigneeId?: string;
+  teamId?: string;
   folderId?: string;
   entityId?: string;
   typeId?: string;
@@ -164,6 +174,7 @@ export interface CreateTaskRequestDto {
   startDate?: string;
   dueDate?: string;
   departmentId?: string | null;
+  teamId?: string | null;
   folderId?: string | null;
   entityId?: string | null;
   typeId?: string | null;
@@ -180,6 +191,7 @@ export interface UpdateTaskRequestDto {
   dueDate?: string | null;
   progress?: number;
   departmentId?: string | null;
+  teamId?: string | null;
   folderId?: string | null;
   entityId?: string | null;
   typeId?: string | null;

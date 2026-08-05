@@ -7,11 +7,11 @@ import { Modal } from '../components/ui/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { useProductSettings } from '../contexts/ProductSettingsContext';
 import { canCreateTasks, getModuleVisibility } from '../access';
-import { filesApi, serviceDeskFoldersApi } from '../api';
+import { filesApi, serviceDeskFoldersApi, serviceDeskTeamsApi } from '../api';
 import { TaskDetailsModal } from '../components/TaskDetailsModal';
 import { DataState } from '../components/ui/DataState';
 import { AssigneeCheckboxList } from '../components/ui/AssigneeCheckboxList';
-import type { ServiceDeskFolder } from '../types';
+import type { ServiceDeskFolder, ServiceDeskTeam } from '../types';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { TASK_BOARD_COLUMNS, TASK_CREATION_STATUS_OPTIONS, normalizeWorkflowStatus } from '../utils';
 
@@ -46,6 +46,7 @@ export const KanbanPage: React.FC = () => {
   } = useAppStore();
   const canCreateTask = canCreateTasks(user?.role) && isFeatureEnabled('ticketCreation');
   const [availableFolders, setAvailableFolders] = useState<ServiceDeskFolder[]>([]);
+  const [availableTeams, setAvailableTeams] = useState<ServiceDeskTeam[]>([]);
   const departmentOptions = toFolderOptions(availableFolders);
   const defaultFolderId = departmentOptions[0]?.id || '';
   const isReadOnlyBoard = getModuleVisibility(user?.role, 'kanban') === 'read-only';
@@ -57,6 +58,7 @@ export const KanbanPage: React.FC = () => {
   const [status, setStatus] = useState<TaskStatus>('NEW');
   const [dueDate, setDueDate] = useState('');
   const [folderId, setFolderId] = useState(defaultFolderId);
+  const [teamId, setTeamId] = useState('');
   const [assignees, setAssignees] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [saving, setSaving] = useState(false);
@@ -96,20 +98,26 @@ export const KanbanPage: React.FC = () => {
   useEffect(() => {
     if (!canCreateTask) {
       setAvailableFolders([]);
+      setAvailableTeams([]);
       return;
     }
 
     let isActive = true;
 
-    serviceDeskFoldersApi.getAll({ adminFallback: user?.role === 'ADMIN' })
-      .then((folders) => {
+    Promise.all([
+      serviceDeskFoldersApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
+      serviceDeskTeamsApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
+    ])
+      .then(([folders, teams]) => {
         if (isActive) {
           setAvailableFolders(folders);
+          setAvailableTeams(teams.filter((team) => team.isActive !== false));
         }
       })
       .catch(() => {
         if (isActive) {
           setAvailableFolders([]);
+          setAvailableTeams([]);
         }
       });
 
@@ -329,7 +337,16 @@ export const KanbanPage: React.FC = () => {
               </div>
             )}
             {user?.role === 'ADMIN' && <div>
-              <label className="mb-1 block text-sm text-[#5f5f5f]">Исполнители</label>
+              <label className="text-sm text-[#5f5f5f]">Команда исполнителей</label>
+              <select className="input mt-1" value={teamId} onChange={(e) => setTeamId(e.target.value)} disabled={saving}>
+                <option value="">Не назначена</option>
+                {availableTeams.map((team) => (
+                  <option key={team.id} value={team.id}>{team.name}</option>
+                ))}
+              </select>
+            </div>}
+            {user?.role === 'ADMIN' && <div>
+              <label className="mb-1 block text-sm text-[#5f5f5f]">Личные исполнители</label>
               <p className="mb-2 text-xs text-[#8a8a8a]">Отметьте одного или нескольких сотрудников.</p>
               <AssigneeCheckboxList users={users} selectedIds={assignees} onChange={setAssignees} disabled={saving} />
             </div>}
@@ -377,6 +394,7 @@ export const KanbanPage: React.FC = () => {
                     status,
                     dueDate: dueDate || undefined,
                     folderId: folderId || undefined,
+                    teamId: user?.role === 'ADMIN' ? teamId || undefined : undefined,
                     assigneeIds: user?.role === 'ADMIN' ? assignees : []
                   });
                   if (files.length) {
@@ -386,6 +404,7 @@ export const KanbanPage: React.FC = () => {
                   setTitle('');
                   setDescription('');
                   setFolderId(defaultFolderId);
+                  setTeamId('');
                   setAssignees([]);
                   setFiles([]);
                   fetchTasks();

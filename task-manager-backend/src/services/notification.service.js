@@ -22,6 +22,24 @@ const TASK_NOTIFICATION_SELECT = {
     description: true,
     priority: true,
     folderId: true,
+    folder: { select: { id: true, name: true } },
+    type: { select: { id: true, name: true } },
+    subtype: { select: { id: true, name: true } },
+    team: {
+        select: {
+            id: true,
+            name: true,
+            isActive: true,
+            members: {
+                where: { user: { isActive: true } },
+                select: {
+                    user: {
+                        select: { id: true, name: true, email: true, role: true }
+                    }
+                }
+            }
+        }
+    },
     authorId: true,
     author: {
         select: {
@@ -92,6 +110,39 @@ const queueAssigneeNotification = async(task, assignee, db = prisma, dedupeKey =
     return queueOutboundEmail({ taskId: task.id, actorId: null, dedupeKey, to: assignee.email, recipientName: assignee.name || null,
         subject: renderTemplate(settings.assigneeSubjectTemplate, variables),
         text: renderTemplate(settings.assigneeBodyTemplate, variables) }, { db });
+};
+
+const queueTeamNewTaskNotifications = async(task, db = prisma) => {
+    const settings = emailSettingsService.getRuntimeEmailSettings();
+    if (!settings.notificationsEnabled
+        || !settings.notifyTeamNewTask
+        || !task?.team?.isActive
+        || !(await productSettingsService.isFeatureEnabled('email', db))) {
+        return [];
+    }
+
+    const members = dedupeRecipients(task.team.members.map((membership) => membership.user).filter(Boolean));
+    const results = [];
+    for (const member of members) {
+        if (!member.email) continue;
+        const variables = notificationVariables(task, {
+            memberName: member.name || member.email,
+            teamName: task.team.name,
+            folderName: task.folder?.name || 'Без папки',
+            typeName: task.type?.name || 'Не указан',
+            subtypeName: task.subtype?.name || 'Не указан'
+        });
+        results.push(await queueOutboundEmail({
+            taskId: task.id,
+            actorId: null,
+            dedupeKey: `team-new-task:${task.id}:${task.team.id}:${member.id}`,
+            to: member.email,
+            recipientName: member.name || null,
+            subject: renderTemplate(settings.teamNewTaskSubjectTemplate, variables),
+            text: renderTemplate(settings.teamNewTaskBodyTemplate, variables)
+        }, { db }));
+    }
+    return results.filter(Boolean);
 };
 
 const parseLimit = (value) => {
@@ -426,17 +477,24 @@ const createNotificationsForUsers = async({
 const notifyTaskCreated = async(taskId, actor, options = {}) => {
     const db = options.db || prisma;
     const task = await getTaskNotificationContext(taskId, db);
-    if (!task || !task.folderId) {
+    if (!task) {
         return [];
     }
 
     const channel = options.channel === 'EMAIL' ? 'EMAIL' : 'WEB';
-    const folderAgents = await getFolderAgentRecipients(task.folderId, db);
+    const teamMembers = task.team?.isActive
+        ? task.team.members.map((membership) => membership.user).filter(Boolean)
+        : [];
+    const recipients = teamMembers.length > 0
+        ? teamMembers
+        : await getFolderAgentRecipients(task.folderId, db);
     const title = channel === 'EMAIL' ? 'Новая заявка из почты' : 'Новая заявка';
-    const message = `${buildTaskLabel(task)} создана и доступна в вашей папке.`;
+    const message = task.team
+        ? `${buildTaskLabel(task)} поступила в очередь команды «${task.team.name}».`
+        : `${buildTaskLabel(task)} создана и доступна в вашей папке.`;
 
     const results = await createNotificationsForUsers({
-        users: folderAgents,
+        users: recipients,
         type: channel === 'EMAIL' ? 'TASK_CREATED_EMAIL' : 'TASK_CREATED_WEB',
         title,
         message,
@@ -449,6 +507,7 @@ const notifyTaskCreated = async(taskId, actor, options = {}) => {
         sendEmail: false,
         db
     });
+    await queueTeamNewTaskNotifications(task, db);
     await queueRequesterTemplate(task, 'Created', {}, db, `requester-created:${task.id}`);
     return results;
 };

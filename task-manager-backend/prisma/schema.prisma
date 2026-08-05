@@ -222,6 +222,8 @@ model Task {
   progress                   Int                     @default(0)
   department                 Department?             @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   departmentId               String?
+  team                       SupportTeam?            @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  teamId                     String?
   folder                     TicketFolder?           @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId                   String?
   entity                     TicketEntity?           @relation(fields: [entityId], references: [id], onDelete: SetNull)
@@ -262,6 +264,7 @@ model Task {
   updatedAt                  DateTime                @updatedAt
 
   @@index([departmentId])
+  @@index([teamId])
   @@index([folderId])
   @@index([entityId])
   @@index([typeId])
@@ -323,55 +326,61 @@ model ProductSettings {
 }
 
 model EmailSettings {
-  id                      String   @id @default("default")
-  intakeEnabled           Boolean  @default(false)
-  imapHost                String   @default("imap.yandex.ru")
-  imapPort                Int      @default(993)
-  imapSecure              Boolean  @default(true)
-  imapUser                String?
-  imapPasswordEncrypted   String?
-  mailbox                 String   @default("INBOX")
-  intakeStartUid          Int      @default(1)
-  intakeMaxMessages       Int      @default(30)
-  intakePollIntervalMs    Int      @default(15000)
-  attachmentMaxBytes      Int      @default(26214400)
-  defaultFolderId         String?
-  defaultEntityId         String?
-  defaultTypeId           String?
-  defaultSubtypeId        String?
-  outboundEnabled         Boolean  @default(false)
-  smtpHost                String   @default("smtp.yandex.ru")
-  smtpPort                Int      @default(465)
-  smtpSecure              Boolean  @default(true)
-  smtpUser                String?
-  smtpPasswordEncrypted   String?
-  fromAddress             String?
-  fromName                String   @default("Office ServiceDesk")
-  workerEnabled           Boolean  @default(true)
-  workerIntervalMs        Int      @default(60000)
-  workerBatchSize         Int      @default(20)
-  lockTtlMs               Int      @default(300000)
-  maxAttempts             Int      @default(5)
-  retryDelayMinutes       Int      @default(15)
-  notificationsEnabled    Boolean  @default(true)
-  notifyRequesterCreated  Boolean  @default(true)
-  notifyRequesterComment  Boolean  @default(true)
-  notifyRequesterStatus   Boolean  @default(true)
-  notifyRequesterAssigned Boolean  @default(false)
-  notifyAssigneeAssigned  Boolean  @default(true)
-  portalBaseUrl           String?
-  createdSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
-  createdBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
-  commentSubjectTemplate  String   @default("[Заявка #{{ticketNumber}}] Новый ответ: {{title}}")
-  commentBodyTemplate     String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} появился новый ответ.\n\n{{comment}}\n\n{{portalLink}}")
-  statusSubjectTemplate   String   @default("[Заявка #{{ticketNumber}}] Статус изменён: {{status}}")
-  statusBodyTemplate      String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
-  assignedSubjectTemplate String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
-  assignedBodyTemplate    String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
-  assigneeSubjectTemplate String   @default("[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}")
-  assigneeBodyTemplate    String   @default("Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                         String   @id @default("default")
+  intakeEnabled              Boolean  @default(false)
+  imapHost                   String   @default("imap.yandex.ru")
+  imapPort                   Int      @default(993)
+  imapSecure                 Boolean  @default(true)
+  imapUser                   String?
+  imapPasswordEncrypted      String?
+  mailbox                    String   @default("INBOX")
+  intakeStartUid             Int      @default(1)
+  intakeMaxMessages          Int      @default(30)
+  intakePollIntervalMs       Int      @default(15000)
+  attachmentMaxBytes         Int      @default(26214400)
+  defaultFolderId            String?
+  defaultEntityId            String?
+  defaultTypeId              String?
+  defaultSubtypeId           String?
+  outboundEnabled            Boolean  @default(false)
+  smtpHost                   String   @default("smtp.yandex.ru")
+  smtpPort                   Int      @default(465)
+  smtpSecure                 Boolean  @default(true)
+  smtpUser                   String?
+  smtpPasswordEncrypted      String?
+  fromAddress                String?
+  fromName                   String   @default("Office ServiceDesk")
+  workerEnabled              Boolean  @default(true)
+  workerIntervalMs           Int      @default(60000)
+  workerBatchSize            Int      @default(20)
+  lockTtlMs                  Int      @default(300000)
+  maxAttempts                Int      @default(5)
+  retryDelayMinutes          Int      @default(15)
+  notificationsEnabled       Boolean  @default(true)
+  notifyRequesterCreated     Boolean  @default(true)
+  notifyRequesterComment     Boolean  @default(true)
+  notifyRequesterStatus      Boolean  @default(true)
+  notifyRequesterAssigned    Boolean  @default(false)
+  notifyAssigneeAssigned     Boolean  @default(true)
+  notifyChatMemberAdded      Boolean  @default(true)
+  notifyTeamNewTask          Boolean  @default(true)
+  portalBaseUrl              String?
+  createdSubjectTemplate     String   @default("[Заявка #{{ticketNumber}}] Заявка принята: {{title}}")
+  createdBodyTemplate        String   @default("Здравствуйте, {{requesterName}}!\n\nМы зарегистрировали вашу заявку #{{ticketNumber}} «{{title}}».\nТекущий статус: {{status}}.\n\n{{portalLink}}")
+  commentSubjectTemplate     String   @default("[Заявка #{{ticketNumber}}] Новый ответ: {{title}}")
+  commentBodyTemplate        String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} появился новый ответ.\n\n{{comment}}\n\n{{portalLink}}")
+  statusSubjectTemplate      String   @default("[Заявка #{{ticketNumber}}] Статус изменён: {{status}}")
+  statusBodyTemplate         String   @default("Здравствуйте, {{requesterName}}!\n\nСтатус заявки #{{ticketNumber}} «{{title}}» изменён: {{oldStatus}} → {{status}}.\n\n{{portalLink}}")
+  assignedSubjectTemplate    String   @default("[Заявка #{{ticketNumber}}] Назначен исполнитель")
+  assignedBodyTemplate       String   @default("Здравствуйте, {{requesterName}}!\n\nПо заявке #{{ticketNumber}} назначен исполнитель: {{assigneeName}}.\n\n{{portalLink}}")
+  assigneeSubjectTemplate    String   @default("[Заявка #{{ticketNumber}}] Вы назначены исполнителем: {{title}}")
+  assigneeBodyTemplate       String   @default("Здравствуйте, {{assigneeName}}!\n\nВы назначены исполнителем заявки #{{ticketNumber}} «{{title}}».\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
+  chatMemberSubjectTemplate  String   @default("[Чат] Вас добавили: {{chatTitle}}")
+  chatMemberBodyTemplate     String   @default("Здравствуйте, {{memberName}}!\n\nВас добавили в чат «{{chatTitle}}».\nДобавил: {{addedByName}}.\n\n{{portalLink}}")
+  teamNewTaskSubjectTemplate String   @default("[Команда {{teamName}}] Новая заявка #{{ticketNumber}}: {{title}}")
+  teamNewTaskBodyTemplate    String   @default("Здравствуйте, {{memberName}}!\n\nВ очереди команды «{{teamName}}» появилась новая заявка #{{ticketNumber}} «{{title}}».\nПапка: {{folderName}}\nТип: {{typeName}}\nПодтип: {{subtypeName}}\nЗаявитель: {{requesterName}}\nПриоритет: {{priority}}\n\nОписание:\n{{description}}\n\n{{portalLink}}")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   @@map("email_settings")
 }
@@ -400,6 +409,8 @@ model TicketType {
   folderId    String?
   entity      TicketEntity?   @relation(fields: [entityId], references: [id], onDelete: SetNull)
   entityId    String?
+  team        SupportTeam?    @relation("TicketTypeRoutingTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  teamId      String?
   tasks       Task[]
   subtypes    TicketSubtype[]
   slaPolicies SlaPolicy[]
@@ -408,6 +419,7 @@ model TicketType {
 
   @@index([folderId])
   @@index([entityId])
+  @@index([teamId])
   @@map("ticket_types")
 }
 
@@ -421,6 +433,8 @@ model TicketSubtype {
   typeId      String
   folder      TicketFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
   folderId    String?
+  team        SupportTeam?  @relation("TicketSubtypeRoutingTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  teamId      String?
   tasks       Task[]
   slaPolicies SlaPolicy[]
   createdAt   DateTime      @default(now())
@@ -428,6 +442,7 @@ model TicketSubtype {
 
   @@unique([typeId, name])
   @@index([folderId])
+  @@index([teamId])
   @@map("ticket_subtypes")
 }
 
@@ -467,6 +482,9 @@ model SupportTeam {
   folderId       String?
   folderAccesses SupportTeamFolder[]
   members        SupportTeamMember[]
+  tasks          Task[]
+  routedTypes    TicketType[]        @relation("TicketTypeRoutingTeam")
+  routedSubtypes TicketSubtype[]     @relation("TicketSubtypeRoutingTeam")
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -585,19 +603,20 @@ model TaskComment {
 }
 
 model ChatThread {
-  id           String        @id @default(cuid())
-  kind         ChatKind
-  title        String?
-  avatar       String?
-  directKey    String?       @unique
-  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  departmentId String?       @unique
-  createdBy    User?         @relation("ChatThreadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  createdById  String?
-  members      ChatMember[]
-  messages     ChatMessage[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                    String                 @id @default(cuid())
+  kind                  ChatKind
+  title                 String?
+  avatar                String?
+  directKey             String?                @unique
+  department            Department?            @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  departmentId          String?                @unique
+  createdBy             User?                  @relation("ChatThreadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById           String?
+  members               ChatMember[]
+  messages              ChatMessage[]
+  emailOutboundMessages EmailOutboundMessage[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([kind, updatedAt])
   @@map("chat_threads")
@@ -679,8 +698,10 @@ model TaskChatParticipant {
 model EmailOutboundMessage {
   id                String              @id @default(cuid())
   dedupeKey         String?             @unique
-  task              Task                @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  taskId            String
+  task              Task?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId            String?
+  chat              ChatThread?         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId            String?
   comment           TaskComment?        @relation(fields: [commentId], references: [id], onDelete: SetNull)
   commentId         String?
   recipientEmail    String
@@ -708,6 +729,7 @@ model EmailOutboundMessage {
   updatedAt         DateTime            @updatedAt
 
   @@index([taskId, createdAt])
+  @@index([chatId, createdAt])
   @@index([status, nextRetryAt])
   @@index([lockedAt])
   @@index([createdById])

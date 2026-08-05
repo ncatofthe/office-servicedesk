@@ -102,7 +102,7 @@ const create = async(req, res) => {
     } catch (error) {
         if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
             return res.status(403).json({ error: error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR
-                ? 'Назначать исполнителей при создании заявки может только администратор.'
+                ? 'Назначать команду или исполнителей при создании заявки может только администратор.'
                 : 'Access denied' });
         }
         res.status(400).json({ error: error.message });
@@ -116,7 +116,7 @@ const update = async(req, res) => {
     } catch (error) {
         if (error.message === 'Access denied' || error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR) {
             return res.status(403).json({ error: error.message === TASK_REASSIGN_ADMIN_ONLY_ERROR
-                ? 'Переназначать исполнителей может только администратор.'
+                ? 'Переназначать команду или исполнителей может только администратор.'
                 : 'Access denied' });
         }
         res.status(400).json({ error: error.message });

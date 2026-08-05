@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Filter, Plus, Search, SlidersHo
 import {
   filesApi,
   serviceDeskFoldersApi,
+  serviceDeskTeamsApi,
   tasksApi,
   ticketEntitiesApi,
   ticketSubtypesApi,
@@ -16,6 +17,7 @@ import type {
   CreateTaskRequest,
   ServiceDeskEntity,
   ServiceDeskFolder,
+  ServiceDeskTeam,
   ServiceDeskTicketSubtype,
   ServiceDeskTicketType,
   TaskPriority,
@@ -173,6 +175,7 @@ export const TasksPage: React.FC = () => {
   const [ticketTypes, setTicketTypes] = useState<ServiceDeskTicketType[]>([]);
   const [ticketSubtypes, setTicketSubtypes] = useState<ServiceDeskTicketSubtype[]>([]);
   const [entities, setEntities] = useState<ServiceDeskEntity[]>([]);
+  const [teams, setTeams] = useState<ServiceDeskTeam[]>([]);
   const [dictionaryWarning, setDictionaryWarning] = useState('');
   const [scope, setScope] = useState<QuickScope>('all');
   const [search, setSearch] = useState('');
@@ -202,6 +205,7 @@ export const TasksPage: React.FC = () => {
   const [typeId, setTypeId] = useState('');
   const [subtypeId, setSubtypeId] = useState('');
   const [entityId, setEntityId] = useState('');
+  const [teamId, setTeamId] = useState('');
   const [assignees, setAssignees] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [showCreateDetails, setShowCreateDetails] = useState(false);
@@ -367,7 +371,8 @@ export const TasksPage: React.FC = () => {
       ticketTypesApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
       ticketSubtypesApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
       ticketEntitiesApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
-    ]).then(([foldersResult, typesResult, subtypesResult, entitiesResult]) => {
+      serviceDeskTeamsApi.getAll({ adminFallback: user?.role === 'ADMIN' }),
+    ]).then(([foldersResult, typesResult, subtypesResult, entitiesResult, teamsResult]) => {
       if (!isActive) {
         return;
       }
@@ -376,8 +381,11 @@ export const TasksPage: React.FC = () => {
       setTicketTypes(typesResult.status === 'fulfilled' ? typesResult.value : []);
       setTicketSubtypes(subtypesResult.status === 'fulfilled' ? subtypesResult.value : []);
       setEntities(entitiesResult.status === 'fulfilled' ? entitiesResult.value : []);
+      setTeams(teamsResult.status === 'fulfilled'
+        ? teamsResult.value.filter((team) => team.isActive !== false)
+        : []);
 
-      const failedCount = [foldersResult, typesResult, subtypesResult, entitiesResult].filter((result) => result.status === 'rejected').length;
+      const failedCount = [foldersResult, typesResult, subtypesResult, entitiesResult, teamsResult].filter((result) => result.status === 'rejected').length;
       setDictionaryWarning(failedCount > 0 ? 'Часть справочников пока недоступна на backend. Недоступные списки показаны пустыми.' : '');
     });
 
@@ -469,6 +477,7 @@ export const TasksPage: React.FC = () => {
     setTypeId('');
     setSubtypeId('');
     setEntityId('');
+    setTeamId('');
     setAssignees([]);
     setFiles([]);
     setShowCreateDetails(false);
@@ -552,6 +561,7 @@ export const TasksPage: React.FC = () => {
     if (typeId) payload.typeId = typeId;
     if (subtypeId) payload.subtypeId = subtypeId;
     if (entityId) payload.entityId = entityId;
+    if (user?.role === 'ADMIN' && teamId) payload.teamId = teamId;
 
     let task: TaskSummary;
     try {
@@ -684,8 +694,7 @@ export const TasksPage: React.FC = () => {
         {nextStatus && (
           <button
             type="button"
-            className={`btn xl:w-full ${requiresCoordinatedClose ? 'min-h-11 py-2 text-center leading-4' : ''}`}
-            style={requiresCoordinatedClose ? { whiteSpace: 'normal', overflowWrap: 'anywhere' } : undefined}
+            className="btn xl:w-full"
             onClick={() => void (requiresCoordinatedClose ? approveCloseFromList(task) : moveForward(task, nextStatus))}
             disabled={Boolean(rowActionId)}
             data-testid="task-quick-status"
@@ -958,7 +967,7 @@ export const TasksPage: React.FC = () => {
             <span>Тип</span>
             <span>Статус</span>
             <span>Приоритет</span>
-            <span>Исполнитель</span>
+            <span>Команда / исполнитель</span>
             <span>Обновлено</span>
             <span>Канал</span>
             <span>Действия</span>
@@ -1003,6 +1012,7 @@ export const TasksPage: React.FC = () => {
                         <p>Заявщик: <span className="text-[#1f1f1f]">{task.author.name}</span></p>
                         <p>Папка: <span className="text-[#1f1f1f]">{task.folder?.name || '—'}</span></p>
                         <p>Тип: <span className="text-[#1f1f1f]">{typeSummary}</span></p>
+                        <p>Команда: <span className="text-[#1f1f1f]">{task.team?.name || '—'}</span></p>
                         <p>Канал: <span className="text-[#1f1f1f]">{channelLabel(taskChannel)}</span></p>
                       </div>
                     )}
@@ -1031,7 +1041,9 @@ export const TasksPage: React.FC = () => {
                     </span>
                   </div>
                   <p className="hidden min-w-0 truncate text-sm text-[#4f4f4f] xl:block">{priorityLabels[task.priority] || task.priority}</p>
-                  <p className="hidden min-w-0 truncate text-sm text-[#4f4f4f] xl:block">{primaryAssignee}</p>
+                  <p className="hidden min-w-0 truncate text-sm text-[#4f4f4f] xl:block" title={[task.team?.name, primaryAssignee].filter(Boolean).join(' / ')}>
+                    {task.team?.name ? `${task.team.name} / ${primaryAssignee}` : primaryAssignee}
+                  </p>
                   <p className="hidden min-w-0 truncate text-sm text-[#4f4f4f] xl:block">{formatDateTime(task.updatedAt)}</p>
                   <p className="hidden min-w-0 truncate text-sm text-[#4f4f4f] xl:block">{channelLabel(taskChannel)}</p>
                   <div className="hidden xl:block">{renderRowAction(task)}</div>
@@ -1119,7 +1131,7 @@ export const TasksPage: React.FC = () => {
           <p className="text-xs text-[#8a8a8a]">
             {user?.role === 'REQUESTER'
               ? 'Поля ниже помогают быстрее направить заявку нужному специалисту. Если не уверены — оставьте их пустыми.'
-              : 'Папка, категория, тип, подтип, приоритет и исполнители — опционально.'}
+              : 'Папка, категория, тип, подтип, приоритет, команда и исполнители — опционально.'}
           </p>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1192,7 +1204,25 @@ export const TasksPage: React.FC = () => {
             </div>
             {user?.role === 'ADMIN' && (
               <div>
-                <label className="mb-1 block text-sm text-[#5f5f5f]">Исполнители</label>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Команда исполнителей</label>
+                <p className="mb-2 text-xs text-[#8a8a8a]">Направьте заявку в общую очередь выбранной команды.</p>
+                <select
+                  className="input"
+                  value={teamId}
+                  onChange={(event) => setTeamId(event.target.value)}
+                  disabled={isSaving}
+                  data-testid="ticket-form-team"
+                >
+                  <option value="">Не назначена</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {user?.role === 'ADMIN' && (
+              <div>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Личные исполнители</label>
                 <p className="mb-2 text-xs text-[#8a8a8a]">Поставьте галочку возле каждого нужного исполнителя.</p>
                 <AssigneeCheckboxList users={assignableUsers} selectedIds={assignees} onChange={setAssignees} disabled={isSaving} />
               </div>

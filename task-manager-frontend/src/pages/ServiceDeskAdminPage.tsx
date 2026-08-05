@@ -125,7 +125,8 @@ const getItemExtra = (
   item: DirectoryItem,
   activeKey: DirectoryKey,
   types: ServiceDeskTicketType[],
-  folders: ServiceDeskFolder[]
+  folders: ServiceDeskFolder[],
+  teams: ServiceDeskTeam[]
 ) => {
   if (activeKey === 'folders') {
     const folder = item as ServiceDeskFolder;
@@ -134,11 +135,15 @@ const getItemExtra = (
   }
 
   if (activeKey === 'types') {
-    return `Папка: ${getRelationName(folders, (item as ServiceDeskTicketType).folderId)}`;
+    const type = item as ServiceDeskTicketType;
+    return `Маршрут: ${getRelationName(folders, type.folderId)} · ${getRelationName(teams, type.teamId)}`;
   }
 
   if (activeKey === 'subtypes') {
-    return `Тип: ${getRelationName(types, (item as ServiceDeskTicketSubtype).typeId)}`;
+    const subtype = item as ServiceDeskTicketSubtype;
+    const folderName = subtype.folderId ? getRelationName(folders, subtype.folderId) : 'наследуется от типа';
+    const teamName = subtype.teamId ? getRelationName(teams, subtype.teamId) : 'наследуется от типа';
+    return `Тип: ${getRelationName(types, subtype.typeId)} · Маршрут: ${folderName} · ${teamName}`;
   }
 
   if (activeKey === 'entities') {
@@ -221,6 +226,8 @@ export const ServiceDeskAdminPage: React.FC = () => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [relationId, setRelationId] = useState('');
+  const [routingFolderId, setRoutingFolderId] = useState('');
+  const [routingTeamId, setRoutingTeamId] = useState('');
   const [folderIdsDraft, setFolderIdsDraft] = useState<string[]>([]);
   const [code, setCode] = useState('');
   const [isActive, setIsActive] = useState(true);
@@ -291,9 +298,10 @@ export const ServiceDeskAdminPage: React.FC = () => {
   }, [selectedTeamId]);
 
   const loadSupportingData = useCallback(async () => {
-    const [foldersResult, typesResult, usersResult] = await Promise.allSettled([
+    const [foldersResult, typesResult, teamsResult, usersResult] = await Promise.allSettled([
       serviceDeskFoldersApi.getManaged(),
       ticketTypesApi.getManaged(),
+      serviceDeskTeamsApi.getManaged(),
       usersApi.getAll(),
     ]);
 
@@ -302,6 +310,9 @@ export const ServiceDeskAdminPage: React.FC = () => {
     }
     if (typesResult.status === 'fulfilled') {
       setItemsByKey((current) => ({ ...current, types: typesResult.value }));
+    }
+    if (teamsResult.status === 'fulfilled') {
+      setItemsByKey((current) => ({ ...current, teams: teamsResult.value }));
     }
     if (usersResult.status === 'fulfilled') {
       setUsers(usersResult.value);
@@ -329,6 +340,8 @@ export const ServiceDeskAdminPage: React.FC = () => {
     setName('');
     setDescription('');
     setRelationId('');
+    setRoutingFolderId('');
+    setRoutingTeamId('');
     setFolderIdsDraft([]);
     setCode('');
     setIsActive(true);
@@ -344,11 +357,19 @@ export const ServiceDeskAdminPage: React.FC = () => {
     setName(item.name);
     setDescription(item.description || '');
     setIsActive(item.isActive !== false);
-    setRelationId(
+    setRelationId(activeKey === 'subtypes' ? ((item as ServiceDeskTicketSubtype).typeId || '') : '');
+    setRoutingFolderId(
       activeKey === 'types'
         ? ((item as ServiceDeskTicketType).folderId || '')
         : activeKey === 'subtypes'
-          ? ((item as ServiceDeskTicketSubtype).typeId || '')
+          ? ((item as ServiceDeskTicketSubtype).folderId || '')
+          : ''
+    );
+    setRoutingTeamId(
+      activeKey === 'types'
+        ? ((item as ServiceDeskTicketType).teamId || '')
+        : activeKey === 'subtypes'
+          ? ((item as ServiceDeskTicketSubtype).teamId || '')
           : ''
     );
     setFolderIdsDraft(activeKey === 'teams' ? getTeamFolderIds(item as ServiceDeskTeam) : []);
@@ -378,6 +399,10 @@ export const ServiceDeskAdminPage: React.FC = () => {
       setError('Введите название элемента настройки.');
       return;
     }
+    if (activeKey === 'subtypes' && !relationId) {
+      setError('Выберите тип заявки для подтипа.');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -390,10 +415,13 @@ export const ServiceDeskAdminPage: React.FC = () => {
       };
 
       if (activeKey === 'types') {
-        payload.folderId = relationId || null;
+        payload.folderId = routingFolderId || null;
+        payload.teamId = routingTeamId || null;
       }
       if (activeKey === 'subtypes') {
         payload.typeId = relationId || null;
+        payload.folderId = routingFolderId || null;
+        payload.teamId = routingTeamId || null;
       }
       if (activeKey === 'entities') {
         payload.code = code.trim() || null;
@@ -629,7 +657,7 @@ export const ServiceDeskAdminPage: React.FC = () => {
                         <span className="chip">{item.isActive === false ? 'Отключено' : 'Активно'}</span>
                       </div>
                       <p className="mt-2 text-sm text-[#606060]">{item.description || 'Описание не указано'}</p>
-                      <p className="mt-3 text-xs text-[#8a8a8a]">{getItemExtra(item, activeDirectoryKey, types, folders)}</p>
+                      <p className="mt-3 text-xs text-[#8a8a8a]">{getItemExtra(item, activeDirectoryKey, types, folders, teams)}</p>
 
                       {activeKey === 'teams' && (
                         <div className="mt-3 space-y-2">
@@ -697,26 +725,51 @@ export const ServiceDeskAdminPage: React.FC = () => {
           </div>
 
           {activeKey === 'types' && (
-            <div>
-              <label className="mb-1 block text-sm text-[#5f5f5f]">Папка</label>
-              <select className="input" value={relationId} onChange={(event) => setRelationId(event.target.value)} disabled={saving}>
-                <option value="">Не привязано</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>{folder.name}</option>
-                ))}
-              </select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Папка маршрута</label>
+                <select className="input" value={routingFolderId} onChange={(event) => setRoutingFolderId(event.target.value)} disabled={saving}>
+                  <option value="">Без автоматической папки</option>
+                  {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Команда исполнителей</label>
+                <select className="input" value={routingTeamId} onChange={(event) => setRoutingTeamId(event.target.value)} disabled={saving}>
+                  <option value="">Без автоматической команды</option>
+                  {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                </select>
+              </div>
+              <p className="text-xs leading-5 text-[#8a8a8a] sm:col-span-2">Новая заявка этого типа сразу попадёт в выбранную папку и очередь команды.</p>
             </div>
           )}
 
           {activeKey === 'subtypes' && (
-            <div>
-              <label className="mb-1 block text-sm text-[#5f5f5f]">Тип заявки</label>
-              <select className="input" value={relationId} onChange={(event) => setRelationId(event.target.value)} disabled={saving}>
-                <option value="">Не привязано</option>
-                {types.map((type) => (
-                  <option key={type.id} value={type.id}>{type.name}</option>
-                ))}
-              </select>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-sm text-[#5f5f5f]">Тип заявки *</label>
+                <select className="input" value={relationId} onChange={(event) => setRelationId(event.target.value)} disabled={saving}>
+                  <option value="">Выберите тип</option>
+                  {types.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </select>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm text-[#5f5f5f]">Папка подтипа</label>
+                  <select className="input" value={routingFolderId} onChange={(event) => setRoutingFolderId(event.target.value)} disabled={saving}>
+                    <option value="">Наследовать от типа</option>
+                    {folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm text-[#5f5f5f]">Команда подтипа</label>
+                  <select className="input" value={routingTeamId} onChange={(event) => setRoutingTeamId(event.target.value)} disabled={saving}>
+                    <option value="">Наследовать от типа</option>
+                    {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs leading-5 text-[#8a8a8a]">Заполненные поля подтипа имеют приоритет над маршрутом его типа.</p>
             </div>
           )}
 
@@ -758,7 +811,7 @@ export const ServiceDeskAdminPage: React.FC = () => {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn" onClick={closeModal} disabled={saving}>Отмена</button>
-            <button type="button" className="btn btn-primary" onClick={saveItem} disabled={saving || !name.trim()}>
+            <button type="button" className="btn btn-primary" onClick={saveItem} disabled={saving || !name.trim() || (activeKey === 'subtypes' && !relationId)}>
               {saving ? 'Сохраняем...' : 'Сохранить'}
             </button>
           </div>
