@@ -516,15 +516,17 @@ export const notificationsApi = {
 
       return Array.isArray(payload.items) ? payload.items : [];
     }),
-  getUnreadCount: async () => {
+  getUnreadCount: async (types?: string[]) => {
     try {
-      const response = await api.get<{ count?: number; unreadCount?: number }>('/notifications/unread-count');
+      const response = await api.get<{ count?: number; unreadCount?: number }>('/notifications/unread-count', {
+        params: types?.length ? { types: types.join(',') } : undefined,
+      });
       return response.data.count ?? response.data.unreadCount ?? 0;
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 404 || status === 405 || status === 501) {
         const notifications = await notificationsApi.getAll({ limit: 100 });
-        return notifications.filter((item) => !item.isRead).length;
+        return notifications.filter((item) => !item.isRead && (!types?.length || types.includes(item.type))).length;
       }
 
       throw error;
@@ -532,9 +534,9 @@ export const notificationsApi = {
   },
   markRead: (id: string) =>
     api.patch(`/notifications/${id}/read`).then(r => r.data),
-  markAllRead: async () => {
+  markAllRead: async (types?: string[]) => {
     try {
-      await api.patch('/notifications/read-all').then(r => r.data);
+      await api.patch('/notifications/read-all', types?.length ? { types } : {}).then(r => r.data);
       return;
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status;
@@ -546,7 +548,7 @@ export const notificationsApi = {
     const notifications = await notificationsApi.getAll({ limit: 100 });
     await Promise.all(
       notifications
-        .filter((item) => !item.isRead)
+        .filter((item) => !item.isRead && (!types?.length || types.includes(item.type)))
         .map((item) => notificationsApi.markRead(item.id).catch(() => undefined))
     );
   },

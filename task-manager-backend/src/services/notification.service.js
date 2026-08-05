@@ -811,12 +811,24 @@ const getNotifications = async(userId, filters = {}, options = {}) => {
     };
 };
 
-const getUnreadCount = async(userId, options = {}) => {
+const parseTypes = (value) => {
+    if (Array.isArray(value)) {
+        return value.map(String).filter(Boolean);
+    }
+    if (typeof value === 'string' && value.trim()) {
+        return value.split(',').map((type) => type.trim()).filter(Boolean);
+    }
+    return [];
+};
+
+const getUnreadCount = async(userId, filters = {}, options = {}) => {
     const db = options.db || prisma;
+    const types = parseTypes(filters.types);
     const unreadCount = await db.notification.count({
         where: {
             userId,
-            isRead: false
+            isRead: false,
+            ...(types.length > 0 ? { type: { in: types } } : {})
         }
     });
 
@@ -848,12 +860,14 @@ const markRead = async(id, userId, options = {}) => {
     return serializeNotification(updated);
 };
 
-const markAllRead = async(userId, options = {}) => {
+const markAllRead = async(userId, filters = {}, options = {}) => {
     const db = options.db || prisma;
+    const types = parseTypes(filters.types);
     const result = await db.notification.updateMany({
         where: {
             userId,
-            isRead: false
+            isRead: false,
+            ...(types.length > 0 ? { type: { in: types } } : {})
         },
         data: {
             isRead: true,

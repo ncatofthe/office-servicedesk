@@ -11,7 +11,7 @@ const getNotifications = async(req, res) => {
 
 const getUnreadCount = async(req, res) => {
     try {
-        const result = await notificationService.getUnreadCount(req.user.id);
+        const result = await notificationService.getUnreadCount(req.user.id, req.query || {});
         res.json(result);
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -29,7 +29,7 @@ const markRead = async(req, res) => {
 
 const markAllRead = async(req, res) => {
     try {
-        const result = await notificationService.markAllRead(req.user.id);
+        const result = await notificationService.markAllRead(req.user.id, req.body || {});
         res.json(result);
     } catch (error) {
         res.status(400).json({ error: error.message });

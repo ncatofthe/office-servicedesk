@@ -21,6 +21,8 @@ import { APP_NAV_ITEMS, canAccessModule, canCreateTasks, isModuleFeatureEnabled 
 import { formatDateTime } from '../utils';
 import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
 
+const NEW_TASK_NOTIFICATION_TYPES = ['TASK_CREATED_WEB', 'TASK_CREATED_EMAIL'];
+
 const notificationTypeLabels: Record<string, string> = {
   TASK_CREATED: 'Новая заявка',
   TASK_CREATED_WEB: 'Новая заявка',
@@ -174,6 +176,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [taskUnreadCount, setTaskUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [notificationsReady, setNotificationsReady] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
@@ -278,6 +281,36 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void syncChatUnreadCount();
+      }
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, [isFeatureEnabled, location.pathname]);
+
+  useEffect(() => {
+    if (!isFeatureEnabled('tickets')) {
+      setTaskUnreadCount(0);
+      return;
+    }
+
+    if (location.pathname === '/tasks') {
+      setTaskUnreadCount(0);
+      notificationsApi.markAllRead(NEW_TASK_NOTIFICATION_TYPES).catch(() => undefined);
+      return;
+    }
+
+    const syncTaskUnreadCount = async () => {
+      try {
+        setTaskUnreadCount(await notificationsApi.getUnreadCount(NEW_TASK_NOTIFICATION_TYPES));
+      } catch {
+        setTaskUnreadCount(0);
+      }
+    };
+
+    void syncTaskUnreadCount();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void syncTaskUnreadCount();
       }
     }, 30000);
 
@@ -440,6 +473,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                           active ? 'bg-white text-[#2f2f2f]' : 'bg-[#2f2f2f] text-white'
                         }`}>
                           {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                        </span>
+                      )}
+                      {item.path === '/tickets' && taskUnreadCount > 0 && (
+                        <span className={`flex min-h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] ${
+                          active ? 'bg-white text-[#2f2f2f]' : 'bg-[#2f2f2f] text-white'
+                        }`}>
+                          {taskUnreadCount > 99 ? '99+' : taskUnreadCount}
                         </span>
                       )}
                     </Link>
@@ -637,6 +677,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                       active ? 'bg-white text-[#292929]' : 'bg-[#292929] text-white'
                     }`}>
                       {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                    </span>
+                  )}
+                  {item.path === '/tickets' && taskUnreadCount > 0 && (
+                    <span className={`flex min-h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] ${
+                      active ? 'bg-white text-[#292929]' : 'bg-[#292929] text-white'
+                    }`}>
+                      {taskUnreadCount > 99 ? '99+' : taskUnreadCount}
                     </span>
                   )}
                 </Link>
