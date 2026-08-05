@@ -113,11 +113,7 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 const getRelationName = (items: ServiceDeskDictionaryItem[], id?: string | null) =>
   items.find((item) => item.id === id)?.name || 'Не привязано';
 
-const getTeamFolderIds = (team: ServiceDeskTeam) => team.folderIds?.length
-  ? team.folderIds
-  : team.folderId
-    ? [team.folderId]
-    : [];
+const getTeamFolderIds = (team: ServiceDeskTeam) => team.folderIds || [];
 
 const TEAM_MEMBER_ROLES = new Set(['ADMIN', 'AGENT', 'DIRECTOR', 'MANAGER', 'EMPLOYEE']);
 
@@ -372,7 +368,6 @@ export const ServiceDeskAdminPage: React.FC = () => {
           ? ((item as ServiceDeskTicketSubtype).teamId || '')
           : ''
     );
-    setFolderIdsDraft(activeKey === 'teams' ? getTeamFolderIds(item as ServiceDeskTeam) : []);
     setCode(activeKey === 'entities' ? ((item as ServiceDeskEntity).code || '') : '');
     setModalOpen(true);
   };
@@ -425,10 +420,6 @@ export const ServiceDeskAdminPage: React.FC = () => {
       }
       if (activeKey === 'entities') {
         payload.code = code.trim() || null;
-      }
-      if (activeKey === 'teams') {
-        payload.folderIds = folderIdsDraft;
-        payload.folderId = folderIdsDraft[0] || null;
       }
 
       if (editingItem) {
@@ -499,7 +490,6 @@ export const ServiceDeskAdminPage: React.FC = () => {
     try {
       await serviceDeskTeamsApi.update(selectedTeam.id, {
         folderIds: folderIdsDraft,
-        folderId: folderIdsDraft[0] || null,
       });
       await refreshTeams(selectedTeam.id);
       setNotice('Доступ команды к папкам обновлён.');
@@ -781,27 +771,10 @@ export const ServiceDeskAdminPage: React.FC = () => {
             </div>
           )}
 
-          {activeKey === 'teams' && (
-            <div>
-              <label className="mb-1 block text-sm text-[#5f5f5f]">Папки команды</label>
-              <div className="grid gap-2 rounded-[10px] border border-[#e3e3e3] bg-[#fcfcfc] p-3 sm:grid-cols-2">
-                {folders.length > 0 ? folders.map((folder) => (
-                  <label key={folder.id} className="flex min-w-0 items-start gap-2 rounded-[8px] bg-white px-3 py-2 text-sm text-[#3f3f3f]">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5"
-                      checked={folderIdsDraft.includes(folder.id)}
-                      onChange={(event) => setFolderIdsDraft((current) => event.target.checked
-                        ? [...current, folder.id]
-                        : current.filter((folderId) => folderId !== folder.id))}
-                      disabled={saving}
-                    />
-                    <span className="break-words">{folder.name}</span>
-                  </label>
-                )) : <p className="text-sm text-[#8a8a8a]">Сначала создайте хотя бы одну папку.</p>}
-              </div>
-              <p className="mt-1 text-xs text-[#8a8a8a]">Команда видит очередь по всем выбранным папкам.</p>
-            </div>
+          {activeKey === 'teams' && editingItem && (
+            <p className="rounded-[10px] border border-[#e3e3e3] bg-[#fcfcfc] p-3 text-xs leading-5 text-[#7d7d7d]">
+              Папки и участники команды настраиваются в «Доступы и участники» — кнопка рядом с командой в списке.
+            </p>
           )}
 
           <label className="flex items-center gap-2 text-sm text-[#4a4a4a]">

@@ -215,10 +215,10 @@ async function createServiceDeskCatalog() {
 
 async function createTeams(users, catalog) {
     const teamIt = await prisma.supportTeam.create({
-        data: { name: 'Линия IT', description: 'Первая линия, доступы, VPN и рабочие места', folderId: catalog.folders.folderIt.id }
+        data: { name: 'Линия IT', description: 'Первая линия, доступы, VPN и рабочие места' }
     });
     const teamOps = await prisma.supportTeam.create({
-        data: { name: 'Операционная поддержка', description: '1С, документы и операционные процессы', folderId: catalog.folders.folderOps.id }
+        data: { name: 'Операционная поддержка', description: '1С, документы и операционные процессы' }
     });
 
     await prisma.supportTeamFolder.createMany({

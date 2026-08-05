@@ -78,8 +78,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Email reliability team ${runId}`,
-                folderId: folder.id
+                name: `Email reliability team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

@@ -68,8 +68,7 @@ if (!hasRequiredEnv) {
         });
         const agentTeam = await prisma.supportTeam.create({
             data: {
-                name: `RBAC team ${runId}`,
-                folderId: sharedFolder.id
+                name: `RBAC team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

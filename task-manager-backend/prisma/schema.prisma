@@ -284,7 +284,6 @@ model TicketFolder {
   tasks           Task[]
   types           TicketType[]
   subtypes        TicketSubtype[]
-  teams           SupportTeam[]
   teamAccesses    SupportTeamFolder[]
   slaPolicies     SlaPolicy[]
   productSettings ProductSettings[]   @relation("ProductSettingsDefaultFolder")
@@ -478,8 +477,6 @@ model SupportTeam {
   name           String              @unique
   description    String?
   isActive       Boolean             @default(true)
-  folder         TicketFolder?       @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  folderId       String?
   folderAccesses SupportTeamFolder[]
   members        SupportTeamMember[]
   tasks          Task[]
@@ -488,7 +485,6 @@ model SupportTeam {
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
-  @@index([folderId])
   @@map("support_teams")
 }
 

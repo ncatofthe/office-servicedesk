@@ -61,8 +61,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Notifications team ${runId}`,
-                folderId: folder.id
+                name: `Notifications team ${runId}`
             }
         });
         await prisma.supportTeamMember.createMany({

@@ -66,8 +66,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Visible team ${runId}`,
-                folderId: visibleFolder.id
+                name: `Visible team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

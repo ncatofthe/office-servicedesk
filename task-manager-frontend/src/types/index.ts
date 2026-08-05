@@ -318,7 +318,6 @@ export interface ServiceDeskEntity extends ServiceDeskDictionaryItem {
 }
 
 export interface ServiceDeskTeam extends ServiceDeskDictionaryItem {
-  folderId?: string | null;
   folderIds?: string[];
   folders?: ServiceDeskFolder[];
   members?: ServiceDeskTeamMember[];

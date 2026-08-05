@@ -27,7 +27,7 @@ const serializeFolder = (folder, options = {}) => {
                 tasks: folder._count.tasks,
                 types: folder._count.types,
                 subtypes: folder._count.subtypes,
-                teams: folder._count.teamAccesses ?? folder._count.teams ?? 0,
+                teams: folder._count.teamAccesses ?? 0,
                 slaPolicies: folder._count.slaPolicies ?? 0,
                 productSettings: folder._count.productSettings ?? 0
             }
@@ -188,8 +188,6 @@ const serializeTeam = (team, options = {}) => {
         name: team.name,
         description: team.description ?? null,
         isActive: team.isActive,
-        folderId: team.folderId ?? null,
-        folder: serializeFolder(team.folder, options),
         folderIds,
         folders,
         members: options.includeMembers === false

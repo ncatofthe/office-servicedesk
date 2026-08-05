@@ -61,8 +61,7 @@ if (!hasRequiredEnv) {
         });
         const queueTeam = await prisma.supportTeam.create({
             data: {
-                name: `Task status team ${runId}`,
-                folderId: queueFolder.id
+                name: `Task status team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

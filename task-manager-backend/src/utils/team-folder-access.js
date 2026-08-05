@@ -12,13 +12,6 @@ const getAgentAccessibleFolderIds = async(userId, db = prisma) => {
         select: {
             team: {
                 select: {
-                    folderId: true,
-                    folder: {
-                        select: {
-                            id: true,
-                            isActive: true
-                        }
-                    },
                     folderAccesses: {
                         where: {
                             folder: {
@@ -34,14 +27,9 @@ const getAgentAccessibleFolderIds = async(userId, db = prisma) => {
         }
     });
 
-    const folderIds = memberships.flatMap((membership) => {
-        const accessIds = membership.team.folderAccesses.map((access) => access.folderId);
-        const legacyFolderId = membership.team.folder?.isActive && membership.team.folderId
-            ? [membership.team.folderId]
-            : [];
-
-        return [...legacyFolderId, ...accessIds];
-    });
+    const folderIds = memberships.flatMap(
+        (membership) => membership.team.folderAccesses.map((access) => access.folderId)
+    );
 
     return [...new Set(folderIds)];
 };

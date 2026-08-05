@@ -62,8 +62,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Comment visibility team ${runId}`,
-                folderId: folder.id
+                name: `Comment visibility team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

@@ -48,8 +48,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Task department team ${runId}`,
-                folderId: folder.id
+                name: `Task department team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({
@@ -123,8 +122,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Task nodepartment team ${runId}`,
-                folderId: folder.id
+                name: `Task nodepartment team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({
@@ -209,8 +207,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Task update department team ${runId}`,
-                folderId: folder.id
+                name: `Task update department team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

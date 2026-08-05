@@ -63,8 +63,7 @@ if (!hasRequiredEnv) {
         });
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Canned team ${runId}`,
-                folderId: folder.id
+                name: `Canned team ${runId}`
             }
         });
         await prisma.supportTeamFolder.create({

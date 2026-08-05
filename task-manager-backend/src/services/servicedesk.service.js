@@ -14,7 +14,6 @@ const FOLDER_SELECT = {
             tasks: true,
             types: true,
             subtypes: true,
-            teams: true,
             teamAccesses: true,
             slaPolicies: true,
             productSettings: true
@@ -117,8 +116,6 @@ const TEAM_SELECT = {
     name: true,
     description: true,
     isActive: true,
-    folderId: true,
-    folder: { select: { id: true, name: true, description: true, isActive: true } },
     folderAccesses: {
         select: {
             id: true,
@@ -407,7 +404,6 @@ const deleteFolder = async(id, options = {}) => {
         tasks: folder._count.tasks,
         types: folder._count.types,
         subtypes: folder._count.subtypes,
-        teams: folder._count.teams,
         teamAccesses: folder._count.teamAccesses,
         slaPolicies: folder._count.slaPolicies,
         productSettings: folder._count.productSettings,
@@ -427,7 +423,6 @@ const deleteFolder = async(id, options = {}) => {
             await tx.task.updateMany({ where: { folderId: id }, data: { folderId: null } });
             await tx.ticketType.updateMany({ where: { folderId: id }, data: { folderId: null } });
             await tx.ticketSubtype.updateMany({ where: { folderId: id }, data: { folderId: null } });
-            await tx.supportTeam.updateMany({ where: { folderId: id }, data: { folderId: null } });
             await tx.supportTeamFolder.deleteMany({ where: { folderId: id } });
             await tx.slaPolicy.updateMany({ where: { folderId: id }, data: { folderId: null } });
             await tx.automationRule.updateMany({ where: { conditionFolderId: id }, data: { conditionFolderId: null } });
@@ -845,33 +840,23 @@ const listActiveTeams = async(user) => prisma.supportTeam.findMany({
 
 const resolveTeamFolderAccess = async(data, db = prisma) => {
     const folderIdsFromArray = normalizeFolderIdsInput(data.folderIds);
-    const legacyFolderId = Object.prototype.hasOwnProperty.call(data, 'folderId')
-        ? await resolveActiveFolderId(data.folderId, db)
-        : undefined;
 
-    if (folderIdsFromArray === undefined && legacyFolderId === undefined) {
+    if (folderIdsFromArray === undefined) {
         return { provided: false };
     }
 
     const resolvedFolderIds = [];
 
-    if (legacyFolderId) {
-        resolvedFolderIds.push(legacyFolderId);
-    }
-
-    if (Array.isArray(folderIdsFromArray)) {
-        for (const folderId of folderIdsFromArray) {
-            const resolvedFolderId = await resolveActiveFolderId(folderId, db, { allowNull: false });
-            if (!resolvedFolderIds.includes(resolvedFolderId)) {
-                resolvedFolderIds.push(resolvedFolderId);
-            }
+    for (const folderId of folderIdsFromArray) {
+        const resolvedFolderId = await resolveActiveFolderId(folderId, db, { allowNull: false });
+        if (!resolvedFolderIds.includes(resolvedFolderId)) {
+            resolvedFolderIds.push(resolvedFolderId);
         }
     }
 
     return {
         provided: true,
-        folderIds: resolvedFolderIds,
-        primaryFolderId: resolvedFolderIds[0] || null
+        folderIds: resolvedFolderIds
     };
 };
 
@@ -892,7 +877,7 @@ const syncTeamFolderAccess = async(teamId, folderIds, db = prisma) => {
 };
 
 const createTeam = async(data) => {
-    assertNoUnsupportedFields(data, ['name', 'description', 'isActive', 'folderId', 'folderIds']);
+    assertNoUnsupportedFields(data, ['name', 'description', 'isActive', 'folderIds']);
     const folderAccess = await resolveTeamFolderAccess(data);
 
     return prisma.$transaction(async(tx) => {
@@ -900,8 +885,7 @@ const createTeam = async(data) => {
             data: {
                 name: normalizeRequiredString(data.name, 'Название команды'),
                 description: normalizeOptionalString(data.description),
-                isActive: data.isActive === undefined ? true : Boolean(data.isActive),
-                folderId: folderAccess.provided ? folderAccess.primaryFolderId : null
+                isActive: data.isActive === undefined ? true : Boolean(data.isActive)
             },
             select: { id: true }
         });
@@ -915,7 +899,7 @@ const createTeam = async(data) => {
 };
 
 const updateTeam = async(id, data) => {
-    assertNoUnsupportedFields(data, ['name', 'description', 'isActive', 'folderId', 'folderIds']);
+    assertNoUnsupportedFields(data, ['name', 'description', 'isActive', 'folderIds']);
     await getTeam(id);
     const folderAccess = await resolveTeamFolderAccess(data);
 
@@ -928,9 +912,6 @@ const updateTeam = async(id, data) => {
     }
     if (Object.prototype.hasOwnProperty.call(data, 'isActive')) {
         updateData.isActive = Boolean(data.isActive);
-    }
-    if (folderAccess.provided) {
-        updateData.folderId = folderAccess.primaryFolderId;
     }
     if (Object.keys(updateData).length === 0 && !folderAccess.provided) {
         throw createServiceDeskError('Нет данных для обновления команды.', 'SERVICEDESK_INVALID');

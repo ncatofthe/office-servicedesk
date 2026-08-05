@@ -126,8 +126,7 @@ if (!hasRequiredEnv) {
 
         const team = await prisma.supportTeam.create({
             data: {
-                name: `Configuration team ${runId}`,
-                folderId: null
+                name: `Configuration team ${runId}`
             }
         });
         teamIds.push(team.id);

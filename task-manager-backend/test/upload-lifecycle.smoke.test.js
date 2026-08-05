@@ -46,8 +46,7 @@ if (!hasRequiredEnv) {
             ? null
             : await prisma.supportTeam.create({
                 data: {
-                    name: `Upload lifecycle team ${runId}`,
-                    folderId: folder.id
+                    name: `Upload lifecycle team ${runId}`
                 }
             });
 

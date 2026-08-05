@@ -334,26 +334,22 @@ async function main() {
         where: { name: 'Линия поддержки IT' },
         update: {
             description: 'Исполнители первой линии по IT-заявкам',
-            folderId: folderIt.id,
             isActive: true
         },
         create: {
             name: 'Линия поддержки IT',
-            description: 'Исполнители первой линии по IT-заявкам',
-            folderId: folderIt.id
+            description: 'Исполнители первой линии по IT-заявкам'
         }
     });
     const teamOps = await prisma.supportTeam.upsert({
         where: { name: 'Операционная поддержка' },
         update: {
             description: 'Исполнители по складским и операционным заявкам',
-            folderId: folderOperations.id,
             isActive: true
         },
         create: {
             name: 'Операционная поддержка',
-            description: 'Исполнители по складским и операционным заявкам',
-            folderId: folderOperations.id
+            description: 'Исполнители по складским и операционным заявкам'
         }
     });
 
