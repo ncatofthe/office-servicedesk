@@ -6,6 +6,14 @@ import { usersApi } from '../api';
 import { getRoleLabel } from '../utils';
 import { getProfileExtras, saveProfileExtras } from '../utils/profile-extras';
 import { prepareAvatarImage } from '../utils/avatar';
+import {
+  ACCENT_COLOR_PRESETS,
+  DEFAULT_ACCENT_COLOR,
+  DEFAULT_MESSAGE_SEND_MODE,
+  getUiPreferences,
+  saveUiPreferences,
+  type MessageSendMode,
+} from '../utils/ui-preferences';
 
 const getDepartmentLabel = (user: NonNullable<ReturnType<typeof useAuth>['user']>) => {
   const primaryDepartmentName = user.primaryDepartment?.name?.trim();
@@ -44,6 +52,9 @@ export const ProfilePage: React.FC = () => {
   const [passwordMessage, setPasswordMessage] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
+  const [messageSendMode, setMessageSendMode] = useState<MessageSendMode>(DEFAULT_MESSAGE_SEND_MODE);
+  const [preferencesMessage, setPreferencesMessage] = useState('');
 
   useEffect(() => {
     if (!user) {
@@ -54,6 +65,10 @@ export const ProfilePage: React.FC = () => {
     setName(user.name);
     setAbout(extras.about || '');
     setAvatarDataUrl(user.avatar || extras.avatarDataUrl);
+
+    const preferences = getUiPreferences(user.id);
+    setAccentColor(preferences.accentColor || DEFAULT_ACCENT_COLOR);
+    setMessageSendMode(preferences.messageSendMode || DEFAULT_MESSAGE_SEND_MODE);
   }, [user]);
 
   const departmentLabel = useMemo(() => (user ? getDepartmentLabel(user) : 'Не указан'), [user]);
@@ -61,6 +76,18 @@ export const ProfilePage: React.FC = () => {
   if (!user) {
     return null;
   }
+
+  const handleAccentColorChange = (nextColor: string) => {
+    setAccentColor(nextColor);
+    saveUiPreferences(user.id, { accentColor: nextColor, messageSendMode });
+    setPreferencesMessage('Цвет применён только для вас.');
+  };
+
+  const handleMessageSendModeChange = (nextMode: MessageSendMode) => {
+    setMessageSendMode(nextMode);
+    saveUiPreferences(user.id, { accentColor, messageSendMode: nextMode });
+    setPreferencesMessage('Настройка отправки сообщений сохранена.');
+  };
 
   const handleProfileSave = async () => {
     const trimmedName = name.trim();
@@ -258,6 +285,79 @@ export const ProfilePage: React.FC = () => {
             {isSaving ? 'Сохраняем...' : 'Сохранить'}
           </button>
         </div>
+      </Card>
+
+      <Card padding="lg" className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold text-[#1f1f1f]">Персонализация</h3>
+          <p className="mt-1 text-sm text-[#6b6b6b]">Эти настройки видны только вам и хранятся в этом браузере.</p>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-[#4a4a4a]">Акцентный цвет</label>
+          <div className="flex flex-wrap gap-2">
+            {ACCENT_COLOR_PRESETS.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                title={preset.label}
+                onClick={() => handleAccentColorChange(preset.value)}
+                className={`h-9 w-9 rounded-full border-2 transition ${
+                  accentColor.toLowerCase() === preset.value.toLowerCase() ? 'border-[#1f1f1f]' : 'border-transparent'
+                }`}
+                style={{ backgroundColor: preset.value }}
+              >
+                <span className="sr-only">{preset.label}</span>
+              </button>
+            ))}
+            <label
+              title="Свой цвет"
+              className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-full border border-dashed border-[#c7c7c7] text-[10px] text-[#8a8a8a]"
+            >
+              +
+              <input
+                type="color"
+                value={accentColor}
+                onChange={(event) => handleAccentColorChange(event.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-2 block text-sm font-medium text-[#4a4a4a]">Отправка сообщений в чатах и комментариях</label>
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 text-sm text-[#4a4a4a]">
+              <input
+                type="radio"
+                className="mt-1"
+                name="message-send-mode"
+                checked={messageSendMode === 'enter-send'}
+                onChange={() => handleMessageSendModeChange('enter-send')}
+              />
+              <span>
+                Enter — отправить, Shift+Enter — новая строка
+                <span className="mt-0.5 block text-xs text-[#8a8a8a]">Стандартное поведение.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm text-[#4a4a4a]">
+              <input
+                type="radio"
+                className="mt-1"
+                name="message-send-mode"
+                checked={messageSendMode === 'enter-newline'}
+                onChange={() => handleMessageSendModeChange('enter-newline')}
+              />
+              <span>
+                Enter — новая строка, отправка только кнопкой
+                <span className="mt-0.5 block text-xs text-[#8a8a8a]">Удобно, если часто печатаете многострочные сообщения.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        {preferencesMessage && <p className="text-sm text-[#1f7a42]">{preferencesMessage}</p>}
       </Card>
 
       <Card padding="lg" className="space-y-4">

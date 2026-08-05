@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import { getAvailableTaskStatusOptions, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
+import { getMessageSendMode } from '../utils/ui-preferences';
 
 interface Props {
   taskId: string | null;
@@ -935,6 +936,26 @@ export const TaskDetailsModal: React.FC<Props> = ({
     }
   };
 
+  const updateRequesterCloseRequired = async (nextValue: boolean) => {
+    if (!taskId || !task || !isAdmin || assignmentSaving) return;
+    if (Boolean(task.requesterCloseRequired) === nextValue) return;
+
+    setAssignmentSaving(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      await tasksApi.update(taskId, { requesterCloseRequired: nextValue });
+      setRequesterCloseRequiredDraft(nextValue);
+      await refreshTaskAndMergeInfo(nextValue
+        ? 'Теперь закрытие требует подтверждения заявителя.'
+        : 'Требование подтверждения заявителя снято.');
+    } catch (actionError) {
+      setError(getApiErrorMessage(actionError, 'Не удалось изменить требование подтверждения заявителя.'));
+    } finally {
+      setAssignmentSaving(false);
+    }
+  };
+
   const deleteTask = async () => {
     if (!taskId || !task || !isAdmin) {
       return;
@@ -1281,6 +1302,36 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       <p className="mt-2 text-[10px] leading-4 text-[#68758a]">Закрытие станет общим только после подтверждения каждого исполнителя.</p>
                     )}
                   </div>
+                  {(isAdmin || task.requesterCloseRequired) && (
+                    <div className="mt-3 rounded-[10px] border border-[#e1e4e8] bg-white p-3">
+                      {isAdmin ? (
+                        <label className="flex items-start gap-2 text-xs text-[#3f4752]">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={Boolean(task.requesterCloseRequired)}
+                            onChange={(event) => void updateRequesterCloseRequired(event.target.checked)}
+                            disabled={assignmentSaving}
+                            data-testid="task-requester-close-required-toggle"
+                          />
+                          <span>
+                            Нельзя закрыть без подтверждения заявителя
+                            {task.requesterCloseRequired && !task.requesterCloseApprovedAt && (
+                              <span className="mt-1 block text-[10px] leading-4 text-[#b23b3b]">
+                                Пока заявитель не подтвердит, кнопка «Закрыть» будет недоступна.
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      ) : (
+                        <p className="text-xs text-[#3f4752]">
+                          {task.requesterCloseApprovedAt
+                            ? 'Заявитель подтвердил закрытие.'
+                            : 'Закрытие требует подтверждения заявителя.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {requiresCoordinatedClose && (
                     <div className="mt-3 rounded-[10px] border border-[#dce3f2] bg-white p-3">
                       <p className="text-xs font-semibold text-[#344563]">Согласованное закрытие</p>
@@ -1356,7 +1407,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
                           value={commentText}
                           onChange={(event) => setCommentText(event.target.value)}
                           onKeyDown={(event) => {
-                            if (event.key === 'Enter' && !event.shiftKey) {
+                            if (event.key !== 'Enter') return;
+                            const sendOnEnter = getMessageSendMode(user?.id) === 'enter-send';
+                            if (sendOnEnter && !event.shiftKey) {
                               event.preventDefault();
                               if (commentText.trim() && !commentSaving) void addComment();
                             }
@@ -1365,7 +1418,11 @@ export const TaskDetailsModal: React.FC<Props> = ({
                           data-testid="comment-input"
                         />
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-[11px] text-[#8a8f98]">Enter — отправить · Shift+Enter — новая строка</span>
+                          <span className="text-[11px] text-[#8a8f98]">
+                            {getMessageSendMode(user?.id) === 'enter-send'
+                              ? 'Enter — отправить · Shift+Enter — новая строка'
+                              : 'Enter — новая строка · отправка кнопкой'}
+                          </span>
                           <button
                             className="btn btn-primary inline-flex items-center gap-2"
                             onClick={addComment}

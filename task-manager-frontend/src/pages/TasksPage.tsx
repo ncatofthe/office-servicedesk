@@ -129,7 +129,7 @@ const getActionErrorMessage = (error: unknown, fallback: string) => {
     return 'Слишком много запросов. Подождите несколько секунд и повторите действие.';
   }
 
-  return fallback;
+  return apiMessage || fallback;
 };
 
 const sortTasks = (tasks: TaskSummary[], sortBy: SortKey) => {
@@ -194,6 +194,9 @@ export const TasksPage: React.FC = () => {
   const [assigneeFilter, setAssigneeFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
+  const [numberFilter, setNumberFilter] = useState('');
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
   const [updatedWindow, setUpdatedWindow] = useState<UpdateWindow>('all');
   const [sortBy, setSortBy] = useState<SortKey>('updated');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -251,6 +254,9 @@ export const TasksPage: React.FC = () => {
     assigneeFilter ||
     tagFilter ||
     channelFilter ||
+    numberFilter ||
+    dateFromFilter ||
+    dateToFilter ||
     updatedWindow !== 'all'
   );
   const hasExtraFilters = Boolean(
@@ -260,12 +266,15 @@ export const TasksPage: React.FC = () => {
     assigneeFilter ||
     tagFilter ||
     channelFilter ||
+    numberFilter ||
+    dateFromFilter ||
+    dateToFilter ||
     updatedWindow !== 'all' ||
     sortBy !== 'updated'
   );
 
   const requiresFullDataset = Boolean(
-    tagFilter.trim() || sortBy === 'priority'
+    tagFilter.trim() || numberFilter.trim() || dateFromFilter || dateToFilter || sortBy === 'priority'
   );
 
   useEffect(() => {
@@ -278,9 +287,12 @@ export const TasksPage: React.FC = () => {
   }, [
     assigneeFilter,
     channelFilter,
+    dateFromFilter,
+    dateToFilter,
     debouncedSearch,
     entityFilter,
     folderFilter,
+    numberFilter,
     pageSize,
     priorityFilter,
     scope,
@@ -422,17 +434,33 @@ export const TasksPage: React.FC = () => {
   }, [canCreateTicket, folders, searchParams, setSearchParams, settings?.defaultFolderId, settings?.defaultPriority]);
 
   const filteredTasks = useMemo(() => {
+    const numberNeedle = numberFilter.trim().replace(/^#/, '');
+    const dateFrom = dateFromFilter ? new Date(`${dateFromFilter}T00:00:00`) : null;
+    const dateTo = dateToFilter ? new Date(`${dateToFilter}T23:59:59.999`) : null;
+
     const items = tasks.filter((task) => {
       if (tagFilter.trim()) {
         const tagNeedle = tagFilter.trim().toLowerCase();
-        return getTaskTags(task).some((tag) => tag.toLowerCase().includes(tagNeedle));
+        if (!getTaskTags(task).some((tag) => tag.toLowerCase().includes(tagNeedle))) {
+          return false;
+        }
+      }
+
+      if (numberNeedle && !String(task.ticketNumber ?? '').includes(numberNeedle)) {
+        return false;
+      }
+
+      if (dateFrom || dateTo) {
+        const createdAt = new Date(task.createdAt);
+        if (dateFrom && createdAt < dateFrom) return false;
+        if (dateTo && createdAt > dateTo) return false;
       }
 
       return true;
     });
 
     return sortBy === 'priority' ? sortTasks(items, sortBy) : items;
-  }, [sortBy, tagFilter, tasks]);
+  }, [dateFromFilter, dateToFilter, numberFilter, sortBy, tagFilter, tasks]);
 
   const visibleTasks = useMemo(
     () => requiresFullDataset
@@ -514,6 +542,9 @@ export const TasksPage: React.FC = () => {
     setAssigneeFilter('');
     setTagFilter('');
     setChannelFilter('');
+    setNumberFilter('');
+    setDateFromFilter('');
+    setDateToFilter('');
     setUpdatedWindow('all');
     setSortBy('updated');
     setShowAdvancedFilters(false);
@@ -675,6 +706,9 @@ export const TasksPage: React.FC = () => {
     const assigneeCount = Math.max(task.assignees?.length || 0, task._count?.assignees || 0);
     const hasAssignees = assigneeCount > 0;
     const requiresCoordinatedClose = nextStatus === 'DONE' && assigneeCount > 1;
+    const blockedByRequesterClose = nextStatus === 'DONE'
+      && Boolean(task.requesterCloseRequired)
+      && !task.requesterCloseApprovedAt;
     const isAssignedToAnotherAgent = Boolean(user?.role === 'AGENT' && hasAssignees && !isMyTask(task));
     const canAssignSelf = Boolean(user && (user.role === 'ADMIN' || user.role === 'AGENT') && !hasAssignees);
 
@@ -691,7 +725,7 @@ export const TasksPage: React.FC = () => {
             {rowActionId === `assign-${task.id}` ? 'Назначаем...' : 'Взять в работу'}
           </button>
         )}
-        {nextStatus && (
+        {nextStatus && !blockedByRequesterClose && (
           <button
             type="button"
             className="btn xl:w-full"
@@ -709,6 +743,11 @@ export const TasksPage: React.FC = () => {
                     ? 'Закрыть'
                     : `Статус: ${getStatusLabel(nextStatus)}`}
           </button>
+        )}
+        {nextStatus && blockedByRequesterClose && (
+          <span className="text-center text-xs leading-4 text-[#8a8a8a]" data-testid="task-quick-status-blocked">
+            Ждём подтверждения заявителя
+          </span>
         )}
         {isAssignedToAnotherAgent && (
           <span className="text-center text-xs leading-4 text-[#8a8a8a]">Закреплена за другим исполнителем</span>
@@ -813,15 +852,26 @@ export const TasksPage: React.FC = () => {
         </div>
 
         <div className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${isRequester ? '' : 'xl:grid-cols-4'}`}>
-          <label className={`relative ${isRequester ? '' : 'xl:col-span-2'}`}>
+          <label className={`relative block ${isRequester ? '' : 'xl:col-span-2'}`}>
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8a8a8a]" />
             <input
-              className="input pl-9"
+              className="input pl-9 pr-9"
               placeholder="Поиск по номеру, теме, описанию или заявителю"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               data-testid="ticket-search"
             />
+            {search && (
+              <button
+                type="button"
+                className="absolute right-2.5 top-1/2 grid h-5 w-5 -translate-y-1/2 place-items-center rounded-full text-[#8a8a8a] hover:bg-[#eeeeee] hover:text-[#3f3f3f]"
+                onClick={() => setSearch('')}
+                aria-label="Очистить поиск"
+                data-testid="ticket-search-clear"
+              >
+                <X size={14} />
+              </button>
+            )}
           </label>
 
           <select className="input" value={statusFilter} onChange={(event) => updateStatusFilter(event.target.value)}>
@@ -943,6 +993,36 @@ export const TasksPage: React.FC = () => {
                 value={tagFilter}
                 onChange={(event) => setTagFilter(event.target.value)}
               />
+
+              <input
+                className="input"
+                placeholder="Номер заявки"
+                inputMode="numeric"
+                value={numberFilter}
+                onChange={(event) => setNumberFilter(event.target.value)}
+              />
+
+              <label className="flex items-center gap-2 text-xs text-[#6f6f6f]">
+                <span className="w-8 shrink-0">С</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateFromFilter}
+                  max={dateToFilter || undefined}
+                  onChange={(event) => setDateFromFilter(event.target.value)}
+                />
+              </label>
+
+              <label className="flex items-center gap-2 text-xs text-[#6f6f6f]">
+                <span className="w-8 shrink-0">По</span>
+                <input
+                  type="date"
+                  className="input"
+                  value={dateToFilter}
+                  min={dateFromFilter || undefined}
+                  onChange={(event) => setDateToFilter(event.target.value)}
+                />
+              </label>
             </div>
           </div>
         )}

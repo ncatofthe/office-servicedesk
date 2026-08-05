@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import type { SessionUser, LoginRequest, RegisterRequest } from '../types';
 import { authApi } from '../api';
+import { applyAccentColor, getUiPreferences, UI_PREFERENCES_UPDATED_EVENT } from '../utils/ui-preferences';
 
 interface AuthContextType {
   user: SessionUser | null;
@@ -101,6 +102,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // logout is stable due to useCallback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshUser, token]);
+
+  useEffect(() => {
+    applyAccentColor(user ? getUiPreferences(user.id).accentColor : undefined);
+
+    if (!user) {
+      return;
+    }
+
+    const handlePreferencesUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string }>).detail;
+      if (detail?.userId === user.id) {
+        applyAccentColor(getUiPreferences(user.id).accentColor);
+      }
+    };
+
+    window.addEventListener(UI_PREFERENCES_UPDATED_EVENT, handlePreferencesUpdated);
+    return () => window.removeEventListener(UI_PREFERENCES_UPDATED_EVENT, handlePreferencesUpdated);
+  }, [user]);
 
   return (
     <AuthContext.Provider

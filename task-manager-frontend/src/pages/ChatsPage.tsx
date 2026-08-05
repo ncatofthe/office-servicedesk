@@ -26,6 +26,7 @@ import { Modal } from '../components/ui/Modal';
 import { UserAvatar } from '../components/ui/UserAvatar';
 import { formatDateTime } from '../utils';
 import { prepareAvatarImage } from '../utils/avatar';
+import { getMessageSendMode } from '../utils/ui-preferences';
 import type {
   ChatAttachment,
   ChatMessage,
@@ -1190,7 +1191,9 @@ export const ChatsPage: React.FC = () => {
                           value={draft}
                           onChange={(event) => setDraft(event.target.value)}
                           onKeyDown={(event) => {
-                            if (event.key === 'Enter' && !event.shiftKey) {
+                            if (event.key !== 'Enter') return;
+                            const sendOnEnter = getMessageSendMode(user?.id) === 'enter-send';
+                            if (sendOnEnter && !event.shiftKey) {
                               event.preventDefault();
                               void sendMessage();
                             }
