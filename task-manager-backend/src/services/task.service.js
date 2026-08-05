@@ -677,6 +677,14 @@ const buildTaskListSearchFilter = (rawSearch) => {
                     }
                 }
             },
+            {
+                comments: {
+                    some: {
+                        visibility: 'PUBLIC',
+                        content: { contains: search, mode: 'insensitive' }
+                    }
+                }
+            },
             ...(Number.isSafeInteger(ticketNumber) && ticketNumber > 0 ? [{ ticketNumber }] : [])
         ]
     };

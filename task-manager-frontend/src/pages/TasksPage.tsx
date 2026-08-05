@@ -700,9 +700,15 @@ export const TasksPage: React.FC = () => {
         : task.status === 'POSTPONED'
           ? 'IN_PROGRESS'
           : undefined;
-    const nextStatus = taskStatusOptions.some((option) => option.value === preferredStatus)
+    const candidateStatus = taskStatusOptions.some((option) => option.value === preferredStatus)
       ? preferredStatus
       : taskStatusOptions[0]?.value;
+    // The quick action in the list is only a shortcut for the two primary steps
+    // (start work / close). Any other available transition has to be picked from
+    // the full status picker inside the ticket, not guessed here.
+    const nextStatus = candidateStatus === 'IN_PROGRESS' || candidateStatus === 'DONE'
+      ? candidateStatus
+      : undefined;
     const assigneeCount = Math.max(task.assignees?.length || 0, task._count?.assignees || 0);
     const hasAssignees = assigneeCount > 0;
     const requiresCoordinatedClose = nextStatus === 'DONE' && assigneeCount > 1;
@@ -739,9 +745,7 @@ export const TasksPage: React.FC = () => {
                 ? 'Перевести в работу'
                 : requiresCoordinatedClose
                   ? 'Согласовать закрытие'
-                  : nextStatus === 'DONE'
-                    ? 'Закрыть'
-                    : `Статус: ${getStatusLabel(nextStatus)}`}
+                  : 'Закрыть'}
           </button>
         )}
         {nextStatus && blockedByRequesterClose && (
@@ -856,7 +860,7 @@ export const TasksPage: React.FC = () => {
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#8a8a8a]" />
             <input
               className="input pl-9 pr-9"
-              placeholder="Поиск по номеру, теме, описанию или заявителю"
+              placeholder="Поиск по номеру, теме, описанию, заявителю или переписке"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               data-testid="ticket-search"
