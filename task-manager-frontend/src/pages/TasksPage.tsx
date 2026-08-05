@@ -192,6 +192,7 @@ export const TasksPage: React.FC = () => {
   const [subtypeFilter, setSubtypeFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [channelFilter, setChannelFilter] = useState('');
   const [numberFilter, setNumberFilter] = useState('');
@@ -252,6 +253,7 @@ export const TasksPage: React.FC = () => {
     subtypeFilter ||
     entityFilter ||
     assigneeFilter ||
+    teamFilter ||
     tagFilter ||
     channelFilter ||
     numberFilter ||
@@ -264,6 +266,7 @@ export const TasksPage: React.FC = () => {
     subtypeFilter ||
     entityFilter ||
     assigneeFilter ||
+    teamFilter ||
     tagFilter ||
     channelFilter ||
     numberFilter ||
@@ -300,6 +303,7 @@ export const TasksPage: React.FC = () => {
     statusFilter,
     subtypeFilter,
     tagFilter,
+    teamFilter,
     typeFilter,
     updatedWindow,
   ]);
@@ -317,6 +321,7 @@ export const TasksPage: React.FC = () => {
     if (subtypeFilter) params.subtypeId = subtypeFilter;
     if (entityFilter) params.entityId = entityFilter;
     if (assigneeFilter) params.assigneeId = assigneeFilter;
+    if (teamFilter) params.teamId = teamFilter;
     if (scope === 'mine') params.scope = 'mine';
     if (channelFilter) params.channel = channelFilter as 'WEB' | 'EMAIL';
     if (updatedWindow !== 'all') {
@@ -345,6 +350,7 @@ export const TasksPage: React.FC = () => {
     sortBy,
     statusFilter,
     subtypeFilter,
+    teamFilter,
     typeFilter,
     updatedWindow,
   ]);
@@ -540,6 +546,7 @@ export const TasksPage: React.FC = () => {
     setSubtypeFilter('');
     setEntityFilter('');
     setAssigneeFilter('');
+    setTeamFilter('');
     setTagFilter('');
     setChannelFilter('');
     setNumberFilter('');
@@ -968,6 +975,15 @@ export const TasksPage: React.FC = () => {
                   <option value="">Все исполнители</option>
                   {assignableUsers.map((teamUser) => (
                     <option key={teamUser.id} value={teamUser.id}>{teamUser.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {teams.length > 0 && (
+                <select className="input" value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} data-testid="team-filter">
+                  <option value="">Все команды</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>{team.name}</option>
                   ))}
                 </select>
               )}
