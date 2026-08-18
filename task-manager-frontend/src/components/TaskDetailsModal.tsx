@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, CheckCircle2, Circle, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, Circle, Copy, FileText, GitMerge, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Search, Send, Trash2, X } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { UserAvatar } from './ui/UserAvatar';
 import { AssigneeCheckboxList } from './ui/AssigneeCheckboxList';
@@ -32,6 +32,7 @@ import type {
 import { getAvailableTaskStatusOptions, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { getMessageSendMode } from '../utils/ui-preferences';
+import { formatTicketDescriptionForExcel, type ExcelClipboardLayout } from '../utils/excel-clipboard';
 
 interface Props {
   taskId: string | null;
@@ -68,6 +69,27 @@ const toDateInputValue = (value?: string | null) => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const writeClipboardText = async (value: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+
+  if (!copied) {
+    throw new Error('Clipboard API is unavailable');
+  }
 };
 
 const mergeModeLabels: Record<TaskMergeMode, string> = {
@@ -516,7 +538,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const [knowledgeError, setKnowledgeError] = useState('');
   const [availableTeams, setAvailableTeams] = useState<ServiceDeskTeam[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(false);
+  const [descriptionCopyMessage, setDescriptionCopyMessage] = useState('');
   const commentsListRef = useRef<HTMLDivElement>(null);
+  const descriptionCopyTimerRef = useRef<number | null>(null);
   const canUpdateStatus = getModuleVisibility(user?.role, 'tasks') !== 'read-only';
   const isAdmin = user?.role === 'ADMIN';
   const isRequesterView = user?.role === 'REQUESTER';
@@ -599,6 +623,12 @@ export const TaskDetailsModal: React.FC<Props> = ({
 
     return () => window.cancelAnimationFrame(frame);
   }, [comments.length, open, taskId]);
+
+  useEffect(() => () => {
+    if (descriptionCopyTimerRef.current !== null) {
+      window.clearTimeout(descriptionCopyTimerRef.current);
+    }
+  }, []);
 
   const applyTaskContext = useCallback((
     updatedTask: TaskDetail,
@@ -768,6 +798,30 @@ export const TaskDetailsModal: React.FC<Props> = ({
     setFolderIdDraft(task.folderId || '');
     setRequesterCloseRequiredDraft(Boolean(task.requesterCloseRequired));
   }, [task]);
+
+  const copyDescriptionForExcel = async (layout: ExcelClipboardLayout) => {
+    if (!task?.description) return;
+
+    try {
+      await writeClipboardText(formatTicketDescriptionForExcel(task.description, layout));
+      const layoutLabel = layout === 'column'
+        ? 'столбцом'
+        : layout === 'row'
+          ? 'строкой'
+          : 'с исходным расположением';
+      setDescriptionCopyMessage(`Скопировано для Excel ${layoutLabel}.`);
+    } catch {
+      setDescriptionCopyMessage('Не удалось скопировать текст. Выделите его вручную.');
+    }
+
+    if (descriptionCopyTimerRef.current !== null) {
+      window.clearTimeout(descriptionCopyTimerRef.current);
+    }
+    descriptionCopyTimerRef.current = window.setTimeout(() => {
+      setDescriptionCopyMessage('');
+      descriptionCopyTimerRef.current = null;
+    }, 3500);
+  };
 
   const addComment = async () => {
     if (!taskId || !commentText.trim()) return;
@@ -1184,7 +1238,49 @@ export const TaskDetailsModal: React.FC<Props> = ({
                 </div>
                 <h2 className="text-xl font-semibold text-[#1f1f1f]">{task.title}</h2>
                 {task.description ? (
-                  <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-[#333333]">{task.description}</p>
+                  <div className="mt-3 rounded-[12px] border border-[#e6e6e6] bg-[#fafafa] p-3" data-testid="task-description-panel">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#777]">Текст заявки</p>
+                        <p className="mt-0.5 text-[11px] leading-4 text-[#909090]">Excel распознаёт переносы как строки, а табуляцию — как столбцы.</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5" aria-label="Копирование текста заявки в Excel">
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-[8px] border border-[#d9d9d9] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#4c4c4c] transition hover:border-[#bdbdbd] hover:bg-[#f4f4f4]"
+                          onClick={() => void copyDescriptionForExcel('original')}
+                          title="Сохранить строки и столбцы как в заявке"
+                          data-testid="task-description-copy-original"
+                        >
+                          <Copy size={13} /> Как в заявке
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-[8px] border border-[#d9d9d9] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#4c4c4c] transition hover:border-[#bdbdbd] hover:bg-[#f4f4f4]"
+                          onClick={() => void copyDescriptionForExcel('column')}
+                          title="Каждый элемент попадёт в отдельную строку Excel"
+                          data-testid="task-description-copy-column"
+                        >
+                          В столбец
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-[8px] border border-[#d9d9d9] bg-white px-2.5 py-1.5 text-[11px] font-medium text-[#4c4c4c] transition hover:border-[#bdbdbd] hover:bg-[#f4f4f4]"
+                          onClick={() => void copyDescriptionForExcel('row')}
+                          title="Каждый элемент попадёт в отдельный столбец Excel"
+                          data-testid="task-description-copy-row"
+                        >
+                          В строку
+                        </button>
+                      </div>
+                    </div>
+                    <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-[#333333] [tab-size:4]" data-testid="task-description-text">{task.description}</pre>
+                    {descriptionCopyMessage && (
+                      <p className="mt-2 text-[11px] font-medium text-[#4f6b55]" role="status" data-testid="task-description-copy-status">
+                        {descriptionCopyMessage}
+                      </p>
+                    )}
+                  </div>
                 ) : (
                   <p className="mt-3 text-sm text-[#8a8a8a]">Описание не указано.</p>
                 )}
