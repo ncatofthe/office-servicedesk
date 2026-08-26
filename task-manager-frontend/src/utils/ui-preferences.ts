@@ -3,6 +3,8 @@ export type MessageSendMode = 'enter-send' | 'enter-newline';
 export interface UiPreferences {
   accentColor?: string;
   messageSendMode?: MessageSendMode;
+  ticketsSummaryExpanded?: boolean;
+  ticketsFiltersExpanded?: boolean;
 }
 
 export const UI_PREFERENCES_UPDATED_EVENT = 'ui-preferences-updated';
@@ -45,10 +47,18 @@ export const getUiPreferences = (userId?: string | null): UiPreferences => {
   return readStoredUiPreferences(userId);
 };
 
-export const saveUiPreferences = (userId: string, nextPreferences: UiPreferences): UiPreferences => {
+export const saveUiPreferences = (userId: string, nextPreferences: Partial<UiPreferences>): UiPreferences => {
+  const currentPreferences = readStoredUiPreferences(userId);
+  const mergedPreferences = { ...currentPreferences, ...nextPreferences };
   const normalized: UiPreferences = {
-    accentColor: nextPreferences.accentColor || undefined,
-    messageSendMode: nextPreferences.messageSendMode || undefined,
+    accentColor: mergedPreferences.accentColor || undefined,
+    messageSendMode: mergedPreferences.messageSendMode || undefined,
+    ticketsSummaryExpanded: typeof mergedPreferences.ticketsSummaryExpanded === 'boolean'
+      ? mergedPreferences.ticketsSummaryExpanded
+      : undefined,
+    ticketsFiltersExpanded: typeof mergedPreferences.ticketsFiltersExpanded === 'boolean'
+      ? mergedPreferences.ticketsFiltersExpanded
+      : undefined,
   };
 
   localStorage.setItem(getStorageKey(userId), JSON.stringify(normalized));

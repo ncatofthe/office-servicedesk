@@ -29,7 +29,7 @@ import type {
   TaskTimelineEventType,
   TeamUser,
 } from '../types';
-import { getAvailableTaskStatusOptions, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
+import { getAvailableTaskStatusOptions, getStatusLabel, isAssignableRole, localizeTaskStatusText, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
 import { getMessageSendMode } from '../utils/ui-preferences';
 import { formatTicketDescriptionForExcel, type ExcelClipboardLayout } from '../utils/excel-clipboard';
@@ -1857,11 +1857,11 @@ export const TaskDetailsModal: React.FC<Props> = ({
                                 </span>
                               </div>
                               <p className="mt-2 text-sm font-medium text-[#1f1f1f]">
-                                {event.title || timelineTypeLabels[event.type]}
+                                {localizeTaskStatusText(event.title) || timelineTypeLabels[event.type]}
                               </p>
                               {event.description && (
                                 <p className="mt-1 text-sm whitespace-pre-wrap text-[#5f5f5f]">
-                                  {event.description}
+                                  {localizeTaskStatusText(event.description)}
                                 </p>
                               )}
                               {metadataLines.length > 0 && (

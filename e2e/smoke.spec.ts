@@ -281,7 +281,7 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
 
     await ensureTaskDetailsOpenFromQueue(page);
     await page.getByTestId('task-status-action-IN_PROGRESS').first().click();
-    await expect(page.getByTestId('task-details-current-status')).toHaveText('В процессе');
+    await expect(page.getByTestId('task-details-current-status')).toHaveText('В работе');
     await expect(page.getByTestId('task-status-action-DONE').first()).toBeVisible();
     await expect(page.getByTestId('task-timeline')).toContainText('Статус изменён');
   });
@@ -410,6 +410,17 @@ test.describe.serial('Office ServiceDesk smoke @smoke', () => {
       });
     });
     await page.goto('/tickets');
+    await expect(page.getByTestId('ticket-summary-toggle')).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId('ticket-summary-content')).toHaveCount(0);
+    await page.getByTestId('ticket-summary-toggle').click();
+    await expect(page.getByTestId('ticket-summary-content')).toBeVisible();
+    await page.getByTestId('ticket-summary-toggle').click();
+    await expect(page.getByTestId('ticket-summary-content')).toHaveCount(0);
+    await expect(page.getByTestId('ticket-filters-toggle')).toHaveAttribute('aria-expanded', 'true');
+    await page.getByTestId('ticket-filters-toggle').click();
+    await expect(page.getByTestId('ticket-filters-content')).toHaveCount(0);
+    await page.getByTestId('ticket-filters-toggle').click();
+    await expect(page.getByTestId('ticket-filters-content')).toBeVisible();
     await expect(page.getByTestId('ticket-pagination-range')).toHaveText('Показаны 1–25 из 30');
     await page.getByTestId('ticket-pagination-next').click();
     await expect(page.getByTestId('ticket-pagination-range')).toHaveText('Показаны 26–30 из 30');

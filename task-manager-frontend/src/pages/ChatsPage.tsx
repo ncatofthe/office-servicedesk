@@ -24,7 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { DataState } from '../components/ui/DataState';
 import { Modal } from '../components/ui/Modal';
 import { UserAvatar } from '../components/ui/UserAvatar';
-import { formatDateTime } from '../utils';
+import { formatDateTime, getStatusLabel, localizeTaskStatusText } from '../utils';
 import { prepareAvatarImage } from '../utils/avatar';
 import { getMessageSendMode } from '../utils/ui-preferences';
 import type {
@@ -76,14 +76,6 @@ const getApiError = (error: unknown, fallback: string) => {
 
 const getTaskNumber = (task: TaskSummary) =>
   task.ticketNumber ? `#${task.ticketNumber}` : `#${task.id.slice(-6).toUpperCase()}`;
-
-const getStatusLabel = (status?: string) => ({
-  NEW: 'Новая',
-  IN_PROGRESS: 'В работе',
-  REVIEW: 'На проверке',
-  DONE: 'Закрыта',
-  MERGED: 'Объединена',
-}[String(status || '').toUpperCase()] || status || 'Заявка');
 
 const getPriorityLabel = (priority?: string) => ({
   LOW: 'Низкий',
@@ -1085,8 +1077,8 @@ export const ChatsPage: React.FC = () => {
                             {item.type === 'event' ? (
                               <div className="flex justify-center py-1">
                                 <div className="max-w-[92%] rounded-full border border-[#dfe3e8] bg-[#f1f3f5] px-3.5 py-2 text-center text-[11px] text-[#66707a]">
-                                  <span className="font-semibold text-[#48525d]">{item.event.title}</span>
-                                  {item.event.description && <span> · {item.event.description}</span>}
+                                  <span className="font-semibold text-[#48525d]">{localizeTaskStatusText(item.event.title)}</span>
+                                  {item.event.description && <span> · {localizeTaskStatusText(item.event.description)}</span>}
                                   {item.event.actor?.name && <span> · {item.event.actor.name}</span>}
                                   <span className="ml-1 text-[#969ca3]">{formatConversationTime(item.createdAt)}</span>
                                 </div>

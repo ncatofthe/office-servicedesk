@@ -18,7 +18,7 @@ import { chatsApi, notificationsApi } from '../api';
 import type { Notification } from '../types';
 import { UserAvatar } from './ui/UserAvatar';
 import { APP_NAV_ITEMS, canAccessModule, canCreateTasks, isModuleFeatureEnabled } from '../access';
-import { formatDateTime } from '../utils';
+import { formatDateTime, getStatusLabel, localizeTaskStatusText } from '../utils';
 import { getProfileExtras, PROFILE_EXTRAS_UPDATED_EVENT } from '../utils/profile-extras';
 
 const NEW_TASK_NOTIFICATION_TYPES = ['TASK_CREATED_WEB', 'TASK_CREATED_EMAIL'];
@@ -43,16 +43,6 @@ const notificationTypeLabels: Record<string, string> = {
   EMAIL_OUTBOUND_RECOVERED: 'Email доставлен после повтора',
   CANNED_REPLY_USED: 'Шаблон ответа',
 };
-
-const taskStatusLabels: Record<string, string> = {
-  NEW: 'Необработано',
-  IN_PROGRESS: 'В процессе',
-  DONE: 'Закрыто',
-  MERGED: 'Объединена',
-  REVIEW: 'На проверке',
-};
-
-const getTaskStatusLabel = (status: string) => taskStatusLabels[status.toUpperCase()] || status;
 
 const getNotificationTaskName = (notification: Notification, fallback?: string) => {
   const taskTitle = notification.task?.title?.trim() || fallback?.trim();
@@ -86,7 +76,7 @@ const getNotificationTypeLabel = (type?: string) => {
 const getNotificationMessage = (notification: Notification) => {
   const transition = getStatusTransition(notification);
   if (transition) {
-    return `${getNotificationTaskName(notification, transition.taskName)}: ${getTaskStatusLabel(transition.from)} → ${getTaskStatusLabel(transition.to)}.`;
+    return `${getNotificationTaskName(notification, transition.taskName)}: ${getStatusLabel(transition.from)} → ${getStatusLabel(transition.to)}.`;
   }
 
   const rawMessage = notification.description?.trim() || notification.message?.trim() || '';
@@ -95,7 +85,7 @@ const getNotificationMessage = (notification: Notification) => {
     return `${getNotificationTaskName(notification, reviewMatch[1])} отправлена на проверку.`;
   }
 
-  return rawMessage || 'Новое событие в ServiceDesk.';
+  return localizeTaskStatusText(rawMessage) || 'Новое событие в ServiceDesk.';
 };
 
 const getNotificationTitle = (notification: Notification) => {
@@ -110,7 +100,7 @@ const getNotificationTitle = (notification: Notification) => {
 
   const title = notification.title?.trim();
   if (title && !/^notification$/i.test(title) && title.toLowerCase() !== 'уведомление') {
-    return title;
+    return localizeTaskStatusText(title);
   }
 
   return getNotificationTypeLabel(notification.type);

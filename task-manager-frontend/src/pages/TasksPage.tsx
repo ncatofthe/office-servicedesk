@@ -31,6 +31,7 @@ import { DataState } from '../components/ui/DataState';
 import { AssigneeCheckboxList } from '../components/ui/AssigneeCheckboxList';
 import { TASK_STATUS_OPTIONS, formatDateTime, getAvailableTaskStatusOptions, getStatusColor, getStatusLabel, isAssignableRole, priorityLabels } from '../utils';
 import type { TaskDepartmentOption } from '../utils/task-departments';
+import { getUiPreferences, saveUiPreferences } from '../utils/ui-preferences';
 import { useSearchParams } from 'react-router-dom';
 
 type QuickScope = 'all' | 'mine';
@@ -201,6 +202,12 @@ export const TasksPage: React.FC = () => {
   const [updatedWindow, setUpdatedWindow] = useState<UpdateWindow>('all');
   const [sortBy, setSortBy] = useState<SortKey>('updated');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [summaryExpanded, setSummaryExpanded] = useState(
+    () => getUiPreferences(user?.id).ticketsSummaryExpanded ?? false
+  );
+  const [filtersExpanded, setFiltersExpanded] = useState(
+    () => getUiPreferences(user?.id).ticketsFiltersExpanded ?? true
+  );
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -275,6 +282,25 @@ export const TasksPage: React.FC = () => {
     updatedWindow !== 'all' ||
     sortBy !== 'updated'
   );
+  const activeFilterCount = [
+    scope !== 'all',
+    Boolean(search),
+    Boolean(statusFilter),
+    Boolean(priorityFilter),
+    Boolean(folderFilter),
+    Boolean(typeFilter),
+    Boolean(subtypeFilter),
+    Boolean(entityFilter),
+    Boolean(assigneeFilter),
+    Boolean(teamFilter),
+    Boolean(tagFilter),
+    Boolean(channelFilter),
+    Boolean(numberFilter),
+    Boolean(dateFromFilter),
+    Boolean(dateToFilter),
+    updatedWindow !== 'all',
+    sortBy !== 'updated',
+  ].filter(Boolean).length;
 
   const requiresFullDataset = Boolean(
     tagFilter.trim() || numberFilter.trim() || dateFromFilter || dateToFilter || sortBy === 'priority'
@@ -284,6 +310,12 @@ export const TasksPage: React.FC = () => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  useEffect(() => {
+    const preferences = getUiPreferences(user?.id);
+    setSummaryExpanded(preferences.ticketsSummaryExpanded ?? false);
+    setFiltersExpanded(preferences.ticketsFiltersExpanded ?? true);
+  }, [user?.id]);
 
   useEffect(() => {
     setPageIndex(0);
@@ -494,10 +526,26 @@ export const TasksPage: React.FC = () => {
   const inboxStats = useMemo(() => ({
     total: filteredTotal,
     newCount: visibleTasks.filter((task) => task.status === 'NEW').length,
-    inProgressCount: visibleTasks.filter((task) => getStatusLabel(task.status) === 'В процессе').length,
+    inProgressCount: visibleTasks.filter((task) => ['IN_PROGRESS', 'REVIEW', 'POSTPONED', 'REWORK'].includes(task.status)).length,
     completedCount: visibleTasks.filter((task) => task.status === 'DONE').length,
     mineCount: user ? visibleTasks.filter((task) => task.assignees?.some((assignee) => assignee.userId === user.id)).length : 0,
   }), [filteredTotal, user, visibleTasks]);
+
+  const toggleSummary = () => {
+    setSummaryExpanded((current) => {
+      const next = !current;
+      if (user?.id) saveUiPreferences(user.id, { ticketsSummaryExpanded: next });
+      return next;
+    });
+  };
+
+  const toggleFilters = () => {
+    setFiltersExpanded((current) => {
+      const next = !current;
+      if (user?.id) saveUiPreferences(user.id, { ticketsFiltersExpanded: next });
+      return next;
+    });
+  };
 
   const resetForm = () => {
     const accessibleDefaultFolderId = settings?.defaultFolderId
@@ -813,39 +861,85 @@ export const TasksPage: React.FC = () => {
         </div>
       )}
 
-      <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${isRequester ? '' : 'lg:grid-cols-4'}`}>
-        {(isRequester
-          ? [
-              ['Всего заявок', inboxStats.total],
-              ['Ожидают обработки', inboxStats.newCount],
-              ['Решено на странице', inboxStats.completedCount],
-            ]
-          : [
-              ['Всего найдено', inboxStats.total],
-              ['Необработано на странице', inboxStats.newCount],
-              ['В работе на странице', inboxStats.inProgressCount],
-              ['Мне на этой странице', inboxStats.mineCount],
-            ]
-        ).map(([label, value]) => (
-          <div key={String(label)} className="rounded-[12px] border border-[#e3e3e3] bg-white px-4 py-3">
-            <p className="text-xs text-[#8a8a8a]">{label}</p>
-            <p className="mt-1 text-lg font-semibold text-[#1f1f1f]">{value}</p>
-          </div>
-        ))}
-      </div>
+      <section className="overflow-hidden rounded-[14px] border border-[#e3e3e3] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.03)]" data-testid="ticket-summary-panel">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#fafafa]"
+          onClick={toggleSummary}
+          aria-expanded={summaryExpanded}
+          data-testid="ticket-summary-toggle"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-[#1f1f1f]">Сводка по заявкам</span>
+            <span className="mt-0.5 block truncate text-xs text-[#8a8a8a]">
+              {summaryExpanded ? 'Краткие показатели по текущей выборке.' : `Найдено заявок: ${inboxStats.total}`}
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-[#666]">
+            {summaryExpanded ? 'Свернуть' : 'Показать'}
+            <ChevronDown size={16} className={`transition-transform ${summaryExpanded ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
 
-      <div className="space-y-3 rounded-[14px] border border-[#e3e3e3] bg-white p-4 shadow-[0_8px_24px_rgba(0,0,0,0.03)]">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#1f1f1f]">
-              <Filter size={16} />
-              {isRequester ? 'Найти заявку' : 'Фильтры заявок'}
-            </div>
-            <p className="mt-1 text-xs text-[#8a8a8a]">
-              {isRequester ? 'Можно искать по номеру, теме или отфильтровать по статусу.' : 'Для обычной работы достаточно поиска, статуса, папки и приоритета.'}
-            </p>
+        {summaryExpanded && (
+          <div className={`grid grid-cols-1 gap-3 border-t border-[#ececec] bg-[#fbfbfb] p-3 sm:grid-cols-3 ${isRequester ? '' : 'lg:grid-cols-4'}`} data-testid="ticket-summary-content">
+            {(isRequester
+              ? [
+                  ['Всего заявок', inboxStats.total],
+                  ['Ожидают обработки', inboxStats.newCount],
+                  ['Выполнено на странице', inboxStats.completedCount],
+                ]
+              : [
+                  ['Всего найдено', inboxStats.total],
+                  ['Необработано на странице', inboxStats.newCount],
+                  ['В работе на странице', inboxStats.inProgressCount],
+                  ['Мне на этой странице', inboxStats.mineCount],
+                ]
+            ).map(([label, value]) => (
+              <div key={String(label)} className="rounded-[11px] border border-[#e3e3e3] bg-white px-4 py-3">
+                <p className="text-xs text-[#8a8a8a]">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-[#1f1f1f]">{value}</p>
+              </div>
+            ))}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-[14px] border border-[#e3e3e3] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.03)]" data-testid="ticket-filters-panel">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[#fafafa]"
+          onClick={toggleFilters}
+          aria-expanded={filtersExpanded}
+          data-testid="ticket-filters-toggle"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[9px] bg-[#f1f1f1] text-[#4f4f4f]">
+              <Filter size={16} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-[#1f1f1f]">{isRequester ? 'Поиск и фильтры' : 'Фильтры заявок'}</span>
+              <span className="mt-0.5 block truncate text-xs text-[#8a8a8a]">
+                {activeFilterCount > 0 ? `Активно условий: ${activeFilterCount} · найдено ${filteredTotal}` : 'Условия не заданы'}
+              </span>
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-2">
+            {activeFilterCount > 0 && (
+              <span className="rounded-full bg-[#2f2f2f] px-2.5 py-1 text-[11px] font-semibold text-white">{activeFilterCount}</span>
+            )}
+            <span className="hidden text-xs font-medium text-[#666] sm:inline">{filtersExpanded ? 'Свернуть' : 'Показать'}</span>
+            <ChevronDown size={16} className={`text-[#666] transition-transform ${filtersExpanded ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+
+        {filtersExpanded && (
+        <div className="space-y-3 border-t border-[#ececec] p-4" data-testid="ticket-filters-content">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-[#8a8a8a]">
+              {isRequester ? 'Ищите по номеру, теме или статусу.' : 'Основные условия видны сразу, редкие находятся в дополнительных фильтрах.'}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
             {canUseAssigneeScope && (
               <div className="flex flex-wrap gap-2">
                 <button className={`btn ${scope === 'all' ? 'btn-primary' : ''}`} onClick={() => setScope('all')}>
@@ -859,8 +953,8 @@ export const TasksPage: React.FC = () => {
             <button className="btn" onClick={resetFilters}>
               Сбросить
             </button>
+            </div>
           </div>
-        </div>
 
         <div className={`grid grid-cols-1 gap-3 md:grid-cols-2 ${isRequester ? '' : 'xl:grid-cols-4'}`}>
           <label className={`relative block ${isRequester ? '' : 'xl:col-span-2'}`}>
@@ -1048,7 +1142,9 @@ export const TasksPage: React.FC = () => {
         )}
 
         {canReadUsers && usersError && <p className="text-xs text-[#b23b3b]">Исполнители недоступны: {usersError}</p>}
-      </div>
+        </div>
+        )}
+      </section>
 
       {loadingTasks ? (
         <DataState variant="loading" message="Загружаем заявки..." />

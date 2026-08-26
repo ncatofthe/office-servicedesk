@@ -50,11 +50,11 @@ export function getInitials(name: string): string {
 
 export const statusLabels: Record<TaskStatus, string> = {
   NEW: 'Необработано',
-  IN_PROGRESS: 'В процессе',
-  REVIEW: 'В процессе',
-  DONE: 'Закрыто',
-  POSTPONED: 'В процессе',
-  REWORK: 'В процессе',
+  IN_PROGRESS: 'В работе',
+  REVIEW: 'На проверке',
+  DONE: 'Выполнено',
+  POSTPONED: 'Отложено',
+  REWORK: 'На доработке',
   MERGED: 'Объединено',
 };
 
@@ -75,8 +75,8 @@ export const TASK_BOARD_COLUMNS: Array<{
   title: string;
 }> = [
   { id: 'NEW', title: 'Необработано' },
-  { id: 'IN_PROGRESS', title: 'В процессе' },
-  { id: 'DONE', title: 'Закрыто' },
+  { id: 'IN_PROGRESS', title: 'В работе' },
+  { id: 'DONE', title: 'Выполнено' },
 ];
 const WORKFLOW_STATUS_OPTIONS: TaskStatus[] = ['NEW', 'IN_PROGRESS', 'DONE'];
 
@@ -138,8 +138,20 @@ export function normalizeWorkflowStatus(status: string): TaskStatus | string {
 }
 
 export function getStatusLabel(status: string): string {
-  const normalizedStatus = normalizeWorkflowStatus(status);
-  return statusLabels[normalizedStatus as TaskStatus] || String(normalizedStatus);
+  const normalizedStatus = String(status || '').toUpperCase();
+  return statusLabels[normalizedStatus as TaskStatus] || String(status);
+}
+
+const TASK_STATUS_TOKEN_PATTERN = /\b(NEW|IN_PROGRESS|REVIEW|DONE|POSTPONED|REWORK|MERGED)\b/g;
+
+export function localizeTaskStatusText(value?: string | null): string {
+  if (!value) {
+    return '';
+  }
+
+  return value
+    .replace(TASK_STATUS_TOKEN_PATTERN, (status) => getStatusLabel(status))
+    .replace(/\s*->\s*/g, ' → ');
 }
 
 export function getRoleLabel(role: string): string {
