@@ -7,7 +7,7 @@
 
 ServiceDesk: заявки, очереди, Kanban, база знаний, роли, вложения, почтовая интеграция. Backend Node/Express/Prisma/PostgreSQL, frontend React/Vite, npm workspaces.
 
-Карточка проекта: `~/Vaults/Main/20 Проекты/office-servicedesk.md`.
+Карточка проекта — в `~/Vaults/Main/20 Проекты/` (та, где `путь: ~/Code/personal/office-servicedesk`).
 
 ## Команды
 
