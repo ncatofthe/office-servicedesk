@@ -64,6 +64,12 @@ if (!hasRequiredEnv) {
                 name: `Notifications team ${runId}`
             }
         });
+        await prisma.supportTeamFolder.create({
+            data: {
+                teamId: team.id,
+                folderId: folder.id
+            }
+        });
         await prisma.supportTeamMember.createMany({
             data: [
                 { teamId: team.id, userId: folderAgent.id, role: 'Исполнитель', isLead: true },

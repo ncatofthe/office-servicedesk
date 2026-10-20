@@ -259,6 +259,21 @@ const resolveActiveTeamId = async(teamId, db = prisma) => {
     return team.id;
 };
 
+const assertSubtypeFolderMatchesType = async(typeId, folderId, db = prisma) => {
+    if (!typeId || !folderId) return;
+
+    const type = await db.ticketType.findUnique({
+        where: { id: typeId },
+        select: { folderId: true }
+    });
+    if (type?.folderId && type.folderId !== folderId) {
+        throw createServiceDeskError(
+            'Папка подтипа должна совпадать с папкой выбранного типа заявки.',
+            'SERVICEDESK_INVALID'
+        );
+    }
+};
+
 const getFolder = async(id, db = prisma) => {
     const folder = await db.ticketFolder.findUnique({
         where: { id },
@@ -715,6 +730,7 @@ const createSubtype = async(data) => {
     }
     const folderId = await resolveActiveFolderId(data.folderId);
     const teamId = await resolveActiveTeamId(data.teamId);
+    await assertSubtypeFolderMatchesType(typeId, folderId);
 
     return prisma.ticketSubtype.create({
         data: {
@@ -732,7 +748,7 @@ const createSubtype = async(data) => {
 
 const updateSubtype = async(id, data) => {
     assertNoUnsupportedFields(data, ['name', 'code', 'description', 'isActive', 'typeId', 'folderId', 'teamId']);
-    await getSubtype(id);
+    const subtype = await getSubtype(id);
 
     const updateData = {};
     if (Object.prototype.hasOwnProperty.call(data, 'name')) {
@@ -763,6 +779,11 @@ const updateSubtype = async(id, data) => {
     if (Object.keys(updateData).length === 0) {
         throw createServiceDeskError('Нет данных для обновления подтипа.', 'SERVICEDESK_INVALID');
     }
+
+    await assertSubtypeFolderMatchesType(
+        Object.prototype.hasOwnProperty.call(updateData, 'typeId') ? updateData.typeId : subtype.typeId,
+        Object.prototype.hasOwnProperty.call(updateData, 'folderId') ? updateData.folderId : subtype.folderId
+    );
 
     return prisma.ticketSubtype.update({ where: { id }, data: updateData, select: SUBTYPE_SELECT });
 };

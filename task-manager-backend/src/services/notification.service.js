@@ -289,14 +289,9 @@ const getFolderAgentRecipients = async(folderId, db = prisma) => {
         where: {
             team: {
                 isActive: true,
-                OR: [
-                    { folderId },
-                    {
-                        folderAccesses: {
-                            some: { folderId }
-                        }
-                    }
-                ]
+                folderAccesses: {
+                    some: { folderId }
+                }
             },
             user: {
                 role: {
